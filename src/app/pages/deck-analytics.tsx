@@ -1,240 +1,254 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, Link } from 'react-router';
 import { Card } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Button } from '../components/ui/button';
-import { ColorBadge } from '../components/color-badge';
-import { HeatmapGrid } from '../components/heatmap';
-import { mockDecks, mockCards } from '../data/mockData';
-import { Share2, Download, Edit } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { Share2, Download, ArrowLeft } from 'lucide-react';
+
+type DeckSummary = {
+  entries: number;
+  wins: number;
+  top8: number;
+  win_rate_estimate: number;
+  top8_rate: number;
+  avg_placement: number | null;
+  tournaments_covered: number;
+};
+
+type FormatBreakdown = {
+  format: string;
+  entries: number;
+  wins: number;
+  top8: number;
+  top8_rate: number;
+  win_rate_estimate: number;
+  avg_placement: number | null;
+};
+
+type TopPlayer = {
+  player: string;
+  entries: number;
+  wins: number;
+  best_placement: number | null;
+};
+
+type RecentResult = {
+  tournament: string | null;
+  date: string | null;
+  format: string | null;
+  region: string | null;
+  country: string | null;
+  players: number | null;
+  player: string | null;
+  placement: number | null;
+  link: string | null;
+};
+
+type DeckDetailsResponse = {
+  deck: string;
+  summary: DeckSummary;
+  format_breakdown: FormatBreakdown[];
+  top_players: TopPlayer[];
+  recent_results: RecentResult[];
+  generated_at: string;
+};
 
 export default function DeckAnalytics() {
-  const deck = mockDecks[0];
+  const { deckId } = useParams();
+  const deckName = useMemo(() => decodeURIComponent(deckId || ''), [deckId]);
 
-  const typeDistribution = [
-    { name: 'Characters', value: 35, color: 'var(--accent-blue)' },
-    { name: 'Events', value: 12, color: 'var(--accent-red)' },
-    { name: 'Stages', value: 3, color: 'var(--accent-green)' }
-  ];
+  const [data, setData] = useState<DeckDetailsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const cardContribution = [
-    { card: 'OP01-031', name: 'Nami', drawnWR: 72.5, mulliganKeep: 85, synergy: 9.2 },
-    { card: 'OP01-047', name: 'Radical Beam', drawnWR: 68.3, mulliganKeep: 45, synergy: 8.5 },
-    { card: 'OP02-036', name: 'Gum-Gum Red Roc', drawnWR: 65.2, mulliganKeep: 15, synergy: 7.8 }
-  ];
+  useEffect(() => {
+    let active = true;
 
-  const mulliganExamples = [
-    {
-      hand: ['OP01-031', 'OP01-047', 'Land', 'Land', 'OP02-036'],
-      decision: 'KEEP',
-      reason: 'Perfect curve with early game presence'
-    },
-    {
-      hand: ['High Cost', 'High Cost', 'Land', 'Land', 'Land'],
-      decision: 'MULLIGAN',
-      reason: 'No early plays, will brick'
-    }
-  ];
+    const fetchDetails = async () => {
+      if (!deckName) {
+        if (active) {
+          setError('Missing deck name');
+          setLoading(false);
+        }
+        return;
+      }
 
-  const heatmapData = [
-    { row: 'Your Deck', col: 'Red Luffy', value: 68 },
-    { row: 'Your Deck', col: 'Purple Kaido', value: 48 },
-    { row: 'Your Deck', col: 'Blue Law', value: 55 }
-  ];
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch(`/meta/deck/${encodeURIComponent(deckName)}`);
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.message || 'Failed to load deck analytics');
+        }
+        if (active) {
+          setData(payload);
+        }
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'Failed to load deck analytics');
+          setData(null);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void fetchDetails();
+
+    return () => {
+      active = false;
+    };
+  }, [deckName]);
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">{deck.deck_name}</h1>
-          <div className="flex items-center gap-3">
-            <ColorBadge color={deck.primary_color} size="sm" />
-            <span className="text-sm font-mono text-[var(--text-muted)]">{deck.leader_code}</span>
-            <span className="text-sm text-[var(--text-secondary)]">• {deck.tags.join(', ')}</span>
-          </div>
+          <Link to="/dashboard" className="inline-flex items-center text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-2">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
+          </Link>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-1">{deckName || 'Deck Analytics'}</h1>
+          <p className="text-[var(--text-secondary)]">Tournament performance breakdown from standings data</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm">
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
+            <Share2 className="w-4 h-4 mr-2" /> Share
           </Button>
           <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button size="sm">
-            <Edit className="w-4 h-4 mr-2" />
-            Edit Deck
+            <Download className="w-4 h-4 mr-2" /> Export
           </Button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="matchups">Matchups</TabsTrigger>
-          <TabsTrigger value="consistency">Consistency</TabsTrigger>
-          <TabsTrigger value="contribution">Card Contribution</TabsTrigger>
-          <TabsTrigger value="mulligan">Mulligan Guide</TabsTrigger>
-        </TabsList>
+      {loading && <p className="text-sm text-[var(--text-muted)]">Loading deck analytics...</p>}
+      {error && <p className="text-sm text-[var(--state-destructive)]">{error}</p>}
 
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6 mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-              <p className="text-sm text-[var(--text-muted)] mb-2">Win Rate</p>
-              <p className="text-3xl font-bold text-[var(--state-success)]">{deck.win_rate}%</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Based on 142 matches</p>
+      {data && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-5 bg-[var(--surface-1)] border-[var(--border-default)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">Estimated Win Rate</p>
+              <p className="text-2xl font-bold text-[var(--state-success)]">{data.summary.win_rate_estimate.toFixed(1)}%</p>
             </Card>
-            <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-              <p className="text-sm text-[var(--text-muted)] mb-2">Consistency</p>
-              <p className="text-3xl font-bold text-[var(--text-primary)]">{deck.consistency_score}/100</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Above average</p>
+            <Card className="p-5 bg-[var(--surface-1)] border-[var(--border-default)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">Top 8 Rate</p>
+              <p className="text-2xl font-bold">{data.summary.top8_rate.toFixed(1)}%</p>
             </Card>
-            <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-              <p className="text-sm text-[var(--text-muted)] mb-2">Meta Fit</p>
-              <p className="text-3xl font-bold text-[var(--accent-blue)]">{deck.meta_fit_score}/100</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Excellent positioning</p>
+            <Card className="p-5 bg-[var(--surface-1)] border-[var(--border-default)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">Avg Placement</p>
+              <p className="text-2xl font-bold">{data.summary.avg_placement ?? 'N/A'}</p>
+            </Card>
+            <Card className="p-5 bg-[var(--surface-1)] border-[var(--border-default)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">Entries / Wins</p>
+              <p className="text-2xl font-bold">{data.summary.entries} / {data.summary.wins}</p>
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-              <h3 className="font-semibold text-[var(--text-primary)] mb-4">Card Type Distribution</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={typeDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {typeDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex justify-center gap-4 mt-4">
-                {typeDistribution.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span className="text-xs text-[var(--text-secondary)]">{entry.name} ({entry.value})</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
+          <Tabs defaultValue="recent" className="w-full">
+            <TabsList>
+              <TabsTrigger value="recent">Recent Results</TabsTrigger>
+              <TabsTrigger value="formats">By Format</TabsTrigger>
+              <TabsTrigger value="players">Top Players</TabsTrigger>
+            </TabsList>
 
-            <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-              <h3 className="font-semibold text-[var(--text-primary)] mb-4">Going First vs Second</h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm text-[var(--text-secondary)]">Going First</span>
-                    <span className="text-sm font-semibold text-[var(--state-success)]">72.3% WR</span>
-                  </div>
-                  <div className="h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
-                    <div className="h-full bg-[var(--state-success)]" style={{ width: '72.3%' }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm text-[var(--text-secondary)]">Going Second</span>
-                    <span className="text-sm font-semibold">64.8% WR</span>
-                  </div>
-                  <div className="h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
-                    <div className="h-full bg-[var(--accent-blue)]" style={{ width: '64.8%' }} />
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-[var(--border-soft)]">
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    <span className="font-semibold text-[var(--state-success)]">+7.5%</span> advantage going first
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Matchups Tab */}
-        <TabsContent value="matchups" className="space-y-6 mt-6">
-          <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-            <h3 className="font-semibold text-[var(--text-primary)] mb-4">Your Deck vs Top Leaders</h3>
-            <HeatmapGrid
-              data={heatmapData}
-              rows={['Your Deck']}
-              cols={['Red Luffy', 'Purple Kaido', 'Blue Law']}
-              onCellClick={(row, col) => console.log(`${row} vs ${col}`)}
-            />
-          </Card>
-        </TabsContent>
-
-        {/* Card Contribution Tab */}
-        <TabsContent value="contribution" className="space-y-6 mt-6">
-          <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-            <h3 className="font-semibold text-[var(--text-primary)] mb-4">Card Performance Analysis</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border-default)]">
-                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Card Code</th>
-                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Name</th>
-                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Drawn Win Rate</th>
-                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Mulligan Keep %</th>
-                    <th className="text-left py-3 px-4 font-medium text-[var(--text-secondary)]">Synergy Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cardContribution.map((card) => (
-                    <tr key={card.card} className="border-b border-[var(--border-soft)] hover:bg-[var(--surface-2)]">
-                      <td className="py-3 px-4 font-mono text-xs">{card.card}</td>
-                      <td className="py-3 px-4">{card.name}</td>
-                      <td className="py-3 px-4 font-semibold text-[var(--state-success)]">{card.drawnWR}%</td>
-                      <td className="py-3 px-4">{card.mulliganKeep}%</td>
-                      <td className="py-3 px-4">{card.synergy}/10</td>
+            <TabsContent value="recent" className="mt-6">
+              <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] overflow-x-auto">
+                <table className="w-full text-sm min-w-[760px]">
+                  <thead>
+                    <tr className="border-b border-[var(--border-default)] text-left">
+                      <th className="py-2 px-2">Date</th>
+                      <th className="py-2 px-2">Tournament</th>
+                      <th className="py-2 px-2">Format</th>
+                      <th className="py-2 px-2">Player</th>
+                      <th className="py-2 px-2">Placement</th>
+                      <th className="py-2 px-2">Players</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* Mulligan Guide Tab */}
-        <TabsContent value="mulligan" className="space-y-6 mt-6">
-          <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
-            <h3 className="font-semibold text-[var(--text-primary)] mb-4">Mulligan Decision Examples</h3>
-            <div className="space-y-4">
-              {mulliganExamples.map((example, idx) => (
-                <div key={idx} className="p-4 bg-[var(--surface-2)] rounded-lg">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      example.decision === 'KEEP' 
-                        ? 'bg-[var(--state-success)]/20 text-[var(--state-success)]'
-                        : 'bg-[var(--state-danger)]/20 text-[var(--state-danger)]'
-                    }`}>
-                      {example.decision}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 mb-3">
-                    {example.hand.map((card, i) => (
-                      <div key={i} className="px-3 py-2 bg-[var(--surface-3)] rounded text-xs font-mono">
-                        {card}
-                      </div>
+                  </thead>
+                  <tbody>
+                    {data.recent_results.map((row, idx) => (
+                      <tr key={`${row.tournament}-${idx}`} className="border-b border-[var(--border-soft)]">
+                        <td className="py-2 px-2">{row.date || '-'}</td>
+                        <td className="py-2 px-2">
+                          {row.link ? (
+                            <a className="text-[var(--accent-blue)] hover:underline" href={row.link} target="_blank" rel="noreferrer">
+                              {row.tournament || '-'}
+                            </a>
+                          ) : (
+                            row.tournament || '-'
+                          )}
+                        </td>
+                        <td className="py-2 px-2">{row.format || '-'}</td>
+                        <td className="py-2 px-2">{row.player || '-'}</td>
+                        <td className="py-2 px-2">{row.placement ?? '-'}</td>
+                        <td className="py-2 px-2">{row.players ?? '-'}</td>
+                      </tr>
                     ))}
-                  </div>
-                  <p className="text-sm text-[var(--text-secondary)]">{example.reason}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                  </tbody>
+                </table>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="formats" className="mt-6">
+              <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] overflow-x-auto">
+                <table className="w-full text-sm min-w-[640px]">
+                  <thead>
+                    <tr className="border-b border-[var(--border-default)] text-left">
+                      <th className="py-2 px-2">Format</th>
+                      <th className="py-2 px-2">Entries</th>
+                      <th className="py-2 px-2">Wins</th>
+                      <th className="py-2 px-2">Top8</th>
+                      <th className="py-2 px-2">Win Rate</th>
+                      <th className="py-2 px-2">Top8 Rate</th>
+                      <th className="py-2 px-2">Avg Placement</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.format_breakdown.map((row) => (
+                      <tr key={row.format} className="border-b border-[var(--border-soft)]">
+                        <td className="py-2 px-2">{row.format}</td>
+                        <td className="py-2 px-2">{row.entries}</td>
+                        <td className="py-2 px-2">{row.wins}</td>
+                        <td className="py-2 px-2">{row.top8}</td>
+                        <td className="py-2 px-2">{row.win_rate_estimate.toFixed(1)}%</td>
+                        <td className="py-2 px-2">{row.top8_rate.toFixed(1)}%</td>
+                        <td className="py-2 px-2">{row.avg_placement ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="players" className="mt-6">
+              <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] overflow-x-auto">
+                <table className="w-full text-sm min-w-[560px]">
+                  <thead>
+                    <tr className="border-b border-[var(--border-default)] text-left">
+                      <th className="py-2 px-2">Player</th>
+                      <th className="py-2 px-2">Entries</th>
+                      <th className="py-2 px-2">Wins</th>
+                      <th className="py-2 px-2">Best Placement</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.top_players.map((row) => (
+                      <tr key={row.player} className="border-b border-[var(--border-soft)]">
+                        <td className="py-2 px-2">{row.player}</td>
+                        <td className="py-2 px-2">{row.entries}</td>
+                        <td className="py-2 px-2">{row.wins}</td>
+                        <td className="py-2 px-2">{row.best_placement ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
     </div>
   );
 }

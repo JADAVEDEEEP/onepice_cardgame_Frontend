@@ -19,6 +19,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/cardsApi': 'http://localhost:3000',
+      '/meta': 'http://localhost:3000',
     },
   },
 

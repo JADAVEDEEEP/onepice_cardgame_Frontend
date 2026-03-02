@@ -9,33 +9,126 @@ import { Switch } from '../components/ui/switch';
 import { CardTile } from '../components/card-tile';
 import { Card as CardType } from '../data/mockData';
 import { useCards } from '../data/cardsApi';
-import { Search, Filter, Save, Download, Sparkles, BarChart3 } from 'lucide-react';
+import { Search, Filter, Save, Download, Sparkles, BarChart3, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+type OptimizeSuggestion = {
+  title: string;
+  detail: string;
+  candidates: CardType[];
+};
+
+type MatchupResult = {
+  archetype: string;
+  color: string;
+  winRate: number;
+  note: string;
+};
 
 export default function DeckBuilder() {
   const [selectedLeader, setSelectedLeader] = useState<CardType | null>(null);
   const [deckCards, setDeckCards] = useState<Map<string, number>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
   const [colorFilter, setColorFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(90);
+  const [optimizeSuggestions, setOptimizeSuggestions] = useState<OptimizeSuggestion[]>([]);
+  const [matchupResults, setMatchupResults] = useState<MatchupResult[]>([]);
+  const [lastOptimizedAt, setLastOptimizedAt] = useState<string | null>(null);
+  const [lastSimulatedAt, setLastSimulatedAt] = useState<string | null>(null);
   const { cards, loading, error } = useCards();
 
   const filteredCards = cards.filter(card => {
     const matchesSearch = card.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          card.card_code.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesColor = colorFilter === 'all' || card.color === colorFilter;
-    return matchesSearch && matchesColor;
+    const matchesType = typeFilter === 'all' || card.type === typeFilter;
+    return matchesSearch && matchesColor && matchesType;
   });
+  const totalCards = Array.from(deckCards.values()).reduce((sum, count) => sum + count, 0);
   const visibleCards = filteredCards.slice(0, visibleCount);
+  const deckProgress = Math.min((totalCards / 50) * 100, 100);
+  const cardByCode = new Map(cards.map((card) => [card.card_code, card]));
+  const selectedDeckCards = Array.from(deckCards.entries())
+    .map(([code, count]) => {
+      const card = cardByCode.get(code);
+      if (!card) return null;
+      return { card, count };
+    })
+    .filter((entry): entry is { card: CardType; count: number } => entry !== null);
+  const uniqueCards = deckCards.size;
+  const leadersCount = cards.filter((card) => card.type === 'leader').length;
+  const counterCards = Array.from(deckCards.entries()).reduce((sum, [code, count]) => {
+    const card = cardByCode.get(code);
+    if (!card || card.counter_value <= 0) return sum;
+    return sum + count;
+  }, 0);
+  const lowCostCards = selectedDeckCards.reduce((sum, { card, count }) => {
+    if (card.cost <= 2) return sum + count;
+    return sum;
+  }, 0);
+  const avgCost = totalCards === 0
+    ? 0
+    : Array.from(deckCards.entries()).reduce((sum, [code, count]) => {
+      const card = cardByCode.get(code);
+      return sum + (card?.cost || 0) * count;
+    }, 0) / totalCards;
+  const typeCounts = selectedDeckCards.reduce(
+    (acc, { card, count }) => {
+      acc[card.type] += count;
+      return acc;
+    },
+    { leader: 0, character: 0, event: 0, stage: 0 }
+  );
+  const colorCounts = selectedDeckCards.reduce(
+    (acc, { card, count }) => {
+      acc[card.color] += count;
+      return acc;
+    },
+    { red: 0, blue: 0, green: 0, purple: 0, black: 0, yellow: 0 }
+  );
+  const curveBuckets: Record<string, number> = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6+': 0 };
+  selectedDeckCards.forEach(({ card, count }) => {
+    const key = card.cost >= 6 ? '6+' : String(Math.max(0, card.cost));
+    curveBuckets[key] += count;
+  });
+  const curveData = [
+    { cost: '0', count: curveBuckets['0'] },
+    { cost: '1', count: curveBuckets['1'] },
+    { cost: '2', count: curveBuckets['2'] },
+    { cost: '3', count: curveBuckets['3'] },
+    { cost: '4', count: curveBuckets['4'] },
+    { cost: '5', count: curveBuckets['5'] },
+    { cost: '6+', count: curveBuckets['6+'] }
+  ];
+  const activeCurveBuckets = curveData.filter((bucket) => bucket.count > 0).length;
+  const counterDensity = totalCards === 0 ? 0 : Math.round((counterCards / totalCards) * 100);
+  const curveCoverageScore = Math.round((activeCurveBuckets / curveData.length) * 100);
+  const consistencyEstimate = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        100 -
+          Math.max(0, 50 - totalCards) * 1.4 -
+          Math.max(0, 25 - counterDensity) * 0.9 -
+          Math.max(0, 30 - Math.round((lowCostCards / Math.max(totalCards, 1)) * 100)) * 0.7 -
+          (selectedLeader ? 0 : 10)
+      )
+    )
+  );
 
   useEffect(() => {
     setVisibleCount(90);
-  }, [searchTerm, colorFilter]);
-
-  const totalCards = Array.from(deckCards.values()).reduce((sum, count) => sum + count, 0);
+  }, [searchTerm, colorFilter, typeFilter]);
   
   const addCard = (card: CardType) => {
+    if (card.type === 'leader') {
+      setSelectedLeader(card);
+      return;
+    }
+
     const current = deckCards.get(card.card_code) || 0;
     if (current < 4 && totalCards < 50) {
       const newDeck = new Map(deckCards);
@@ -57,24 +150,119 @@ export default function DeckBuilder() {
     }
   };
 
-  // Mock curve data
-  const curveData = [
-    { cost: '0', count: 1 },
-    { cost: '1', count: 4 },
-    { cost: '2', count: 8 },
-    { cost: '3', count: 12 },
-    { cost: '4', count: 10 },
-    { cost: '5', count: 7 },
-    { cost: '6+', count: 8 }
-  ];
+  const clearFilters = () => {
+    setSearchTerm('');
+    setColorFilter('all');
+    setTypeFilter('all');
+  };
+
+  const createOptimizeSuggestions = () => {
+    const localCounts = deckCards;
+    const sameColorPool = cards.filter((card) => {
+      if (card.type === 'leader') return false;
+      if (!selectedLeader) return true;
+      return card.color === selectedLeader.color;
+    });
+
+    const canAdd = (card: CardType) => (localCounts.get(card.card_code) || 0) < 4;
+    const lowCostCandidates = sameColorPool
+      .filter((card) => card.type === 'character' && card.cost <= 2 && canAdd(card))
+      .sort((a, b) => (b.counter_value - a.counter_value) || (a.cost - b.cost))
+      .slice(0, 3);
+    const counterCandidates = sameColorPool
+      .filter((card) => card.counter_value >= 1000 && canAdd(card))
+      .sort((a, b) => (b.counter_value - a.counter_value) || (a.cost - b.cost))
+      .slice(0, 3);
+    const removalCandidates = sameColorPool
+      .filter((card) => card.type === 'event' && /k\.o\.|rest|trash|delete/i.test(card.text_effect) && canAdd(card))
+      .sort((a, b) => a.cost - b.cost)
+      .slice(0, 3);
+
+    const suggestions: OptimizeSuggestion[] = [];
+    if (counterDensity < 30) {
+      suggestions.push({
+        title: 'Increase Defensive Density',
+        detail: `Counter density is ${counterDensity}%. Add more +1000/+2000 counter cards to improve survivability.`,
+        candidates: counterCandidates
+      });
+    }
+    if (Math.round((lowCostCards / Math.max(totalCards, 1)) * 100) < 30) {
+      suggestions.push({
+        title: 'Improve Early Curve',
+        detail: 'Your low-cost slot is thin. Add more 1-2 cost characters for smoother turn sequencing.',
+        candidates: lowCostCandidates
+      });
+    }
+    if (typeCounts.event < Math.max(6, Math.round(totalCards * 0.12))) {
+      suggestions.push({
+        title: 'Add Utility/Removal Events',
+        detail: 'Event count is low for competitive pacing. Add flexible interaction cards.',
+        candidates: removalCandidates
+      });
+    }
+
+    if (suggestions.length === 0) {
+      suggestions.push({
+        title: 'Deck Core Looks Balanced',
+        detail: 'No major weaknesses detected. Focus on matchup-specific tech slots.',
+        candidates: sameColorPool.filter((card) => canAdd(card)).slice(0, 3)
+      });
+    }
+
+    setOptimizeSuggestions(suggestions);
+    setLastOptimizedAt(new Date().toLocaleTimeString());
+  };
+
+  const simulateMatchups = () => {
+    const archetypes = [
+      { archetype: 'Red Aggro', color: 'red' },
+      { archetype: 'Blue Control', color: 'blue' },
+      { archetype: 'Purple Ramp', color: 'purple' },
+      { archetype: 'Black Midrange', color: 'black' },
+      { archetype: 'Green Tempo', color: 'green' },
+      { archetype: 'Yellow Life Combo', color: 'yellow' }
+    ];
+
+    const colorVsColor: Record<string, Record<string, number>> = {
+      red: { red: 0, blue: 4, purple: -3, black: 1, green: 2, yellow: 5 },
+      blue: { red: -4, blue: 0, purple: 3, black: 2, green: 1, yellow: 4 },
+      purple: { red: 3, blue: -3, purple: 0, black: 1, green: 0, yellow: -2 },
+      black: { red: -1, blue: -2, purple: -1, black: 0, green: 2, yellow: 3 },
+      green: { red: -2, blue: -1, purple: 0, black: -2, green: 0, yellow: 2 },
+      yellow: { red: -5, blue: -4, purple: 2, black: -3, green: -2, yellow: 0 }
+    };
+
+    const leaderColor = selectedLeader?.color || 'red';
+    const base = Math.round(
+      38 + (consistencyEstimate * 0.35) + (counterDensity * 0.15) + (curveCoverageScore * 0.12)
+    );
+
+    const results: MatchupResult[] = archetypes.map((meta) => {
+      const colorMod = colorVsColor[leaderColor]?.[meta.color] || 0;
+      const sizePenalty = totalCards < 45 ? -6 : 0;
+      const lowCostMod = lowCostCards >= 12 ? 2 : -2;
+      const winRate = Math.max(25, Math.min(75, base + colorMod + sizePenalty + lowCostMod));
+      const note =
+        winRate >= 60
+          ? 'Favored if mulligan is stable.'
+          : winRate >= 50
+            ? 'Skill and sequencing matchup.'
+            : 'Needs side tech and tighter play.';
+
+      return { archetype: meta.archetype, color: meta.color, winRate, note };
+    }).sort((a, b) => b.winRate - a.winRate);
+
+    setMatchupResults(results);
+    setLastSimulatedAt(new Date().toLocaleTimeString());
+  };
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 rounded-[var(--radius-14)] border border-[var(--border-default)] bg-[var(--surface-1)] p-5 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Deck Builder</h1>
-          <p className="text-[var(--text-secondary)]">Build and optimize your competitive deck</p>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)]">Deck Builder</h1>
+          <p className="text-[var(--text-secondary)]">Build and optimize your competitive deck with live cards data.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline">
@@ -92,7 +280,13 @@ export default function DeckBuilder() {
         {/* Left: Filters & Search */}
         <div className="lg:col-span-3 space-y-4">
           <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)]">
-            <h3 className="font-semibold text-[var(--text-primary)] mb-4">Search & Filter</h3>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-semibold text-[var(--text-primary)]">Search & Filter</h3>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X className="w-4 h-4 mr-1" />
+                Reset
+              </Button>
+            </div>
             
             {/* Search */}
             <div className="mb-4">
@@ -131,7 +325,7 @@ export default function DeckBuilder() {
             {/* Type Filter */}
             <div className="mb-4">
               <Label>Type</Label>
-              <Select defaultValue="all">
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="mt-2">
                   <SelectValue />
                 </SelectTrigger>
@@ -158,23 +352,23 @@ export default function DeckBuilder() {
           </Card>
 
           <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)]">
-            <h3 className="font-semibold text-[var(--text-primary)] mb-3">Quick Stats</h3>
+            <h3 className="font-semibold text-[var(--text-primary)] mb-3">Live Stats</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Counter Density</span>
-                <span className="font-medium">18%</span>
+                <span className="text-[var(--text-secondary)]">Leaders Available</span>
+                <span className="font-medium">{leadersCount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Removal Count</span>
-                <span className="font-medium">8</span>
+                <span className="text-[var(--text-secondary)]">Unique Cards In Deck</span>
+                <span className="font-medium">{uniqueCards}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Draw/Search</span>
-                <span className="font-medium">12</span>
+                <span className="text-[var(--text-secondary)]">Counter Cards</span>
+                <span className="font-medium">{counterCards}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Tempo Score</span>
-                <span className="font-medium text-[var(--state-success)]">8.2/10</span>
+                <span className="text-[var(--text-secondary)]">Average Cost</span>
+                <span className="font-medium text-[var(--state-success)]">{avgCost.toFixed(1)}</span>
               </div>
             </div>
           </Card>
@@ -190,9 +384,29 @@ export default function DeckBuilder() {
               </p>
             </div>
 
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <span className="text-xs rounded-full bg-[var(--surface-2)] px-2 py-1 text-[var(--text-secondary)]">
+                Color: {colorFilter}
+              </span>
+              <span className="text-xs rounded-full bg-[var(--surface-2)] px-2 py-1 text-[var(--text-secondary)]">
+                Type: {typeFilter}
+              </span>
+              {searchTerm && (
+                <span className="text-xs rounded-full bg-[var(--surface-2)] px-2 py-1 text-[var(--text-secondary)]">
+                  Search: {searchTerm}
+                </span>
+              )}
+            </div>
+
             {error && (
               <p className="text-sm text-[var(--state-destructive)] mb-4">
                 Failed to load cards: {error}
+              </p>
+            )}
+
+            {!loading && !error && filteredCards.length === 0 && (
+              <p className="text-sm text-[var(--text-muted)] mb-4">
+                No cards found for selected filters.
               </p>
             )}
             
@@ -226,7 +440,7 @@ export default function DeckBuilder() {
         </div>
 
         {/* Right: Deck Panel */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-4 lg:self-start">
           <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-[var(--text-primary)]">Your Deck</h3>
@@ -244,9 +458,12 @@ export default function DeckBuilder() {
                     <p className="text-sm font-medium truncate">{selectedLeader.name}</p>
                     <p className="text-xs font-mono text-[var(--text-muted)]">{selectedLeader.card_code}</p>
                   </div>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedLeader(null)}>
+                    Clear
+                  </Button>
                 </div>
               ) : (
-                <p className="text-sm text-[var(--text-muted)] text-center">Select Leader</p>
+                <p className="text-sm text-[var(--text-muted)] text-center">Select a Leader card from the grid</p>
               )}
             </div>
 
@@ -255,7 +472,7 @@ export default function DeckBuilder() {
               <div className="h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
                 <div
                   className="h-full bg-[var(--accent-blue)] transition-all"
-                  style={{ width: `${(totalCards / 50) * 100}%` }}
+                  style={{ width: `${deckProgress}%` }}
                 />
               </div>
             </div>
@@ -270,7 +487,7 @@ export default function DeckBuilder() {
               <TabsContent value="list" className="mt-4">
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {Array.from(deckCards.entries()).map(([code, count]) => {
-                    const card = cards.find(c => c.card_code === code);
+                    const card = cardByCode.get(code);
                     if (!card) return null;
                     return (
                       <div key={code} className="flex items-center gap-2 p-2 bg-[var(--surface-2)] rounded">
@@ -315,19 +532,101 @@ export default function DeckBuilder() {
                     <p className="text-xs text-[var(--text-muted)] mb-1">Consistency Estimate</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
-                        <div className="h-full bg-[var(--state-success)]" style={{ width: '85%' }} />
+                        <div className="h-full bg-[var(--state-success)]" style={{ width: `${consistencyEstimate}%` }} />
                       </div>
-                      <span className="text-sm font-semibold">85/100</span>
+                      <span className="text-sm font-semibold">{consistencyEstimate}/100</span>
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full">
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-[var(--text-muted)]">Counter Density</span>
+                      <span className="font-semibold">{counterDensity}%</span>
+                    </div>
+                    <div className="h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
+                      <div className="h-full bg-[var(--accent-blue)]" style={{ width: `${counterDensity}%` }} />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-[var(--text-muted)]">Curve Coverage</span>
+                      <span className="font-semibold">{curveCoverageScore}%</span>
+                    </div>
+                    <div className="h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
+                      <div className="h-full bg-[var(--accent-purple)]" style={{ width: `${curveCoverageScore}%` }} />
+                    </div>
+                  </div>
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">Type Spread</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex justify-between"><span>Character</span><span>{typeCounts.character}</span></div>
+                      <div className="flex justify-between"><span>Event</span><span>{typeCounts.event}</span></div>
+                      <div className="flex justify-between"><span>Stage</span><span>{typeCounts.stage}</span></div>
+                      <div className="flex justify-between"><span>Main Deck</span><span>{totalCards}</span></div>
+                      <div className="flex justify-between"><span>Leader Slot</span><span>{selectedLeader ? 'Filled' : 'Empty'}</span></div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">Color Spread</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">Main deck colors only (leader excluded)</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex justify-between"><span>Red</span><span>{colorCounts.red}</span></div>
+                      <div className="flex justify-between"><span>Blue</span><span>{colorCounts.blue}</span></div>
+                      <div className="flex justify-between"><span>Green</span><span>{colorCounts.green}</span></div>
+                      <div className="flex justify-between"><span>Purple</span><span>{colorCounts.purple}</span></div>
+                      <div className="flex justify-between"><span>Black</span><span>{colorCounts.black}</span></div>
+                      <div className="flex justify-between"><span>Yellow</span><span>{colorCounts.yellow}</span></div>
+                    </div>
+                  </div>
+                  <Button variant="outline" className="w-full" onClick={createOptimizeSuggestions}>
                     <Sparkles className="w-4 h-4 mr-2" />
                     Optimize Deck
                   </Button>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" onClick={simulateMatchups}>
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Simulate Matchups
                   </Button>
+                  {optimizeSuggestions.length > 0 && (
+                    <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">Optimization Suggestions</p>
+                        {lastOptimizedAt && <span className="text-[10px] text-[var(--text-muted)]">{lastOptimizedAt}</span>}
+                      </div>
+                      {optimizeSuggestions.map((suggestion) => (
+                        <div key={suggestion.title} className="rounded-md border border-[var(--border-default)] p-2">
+                          <p className="text-xs font-medium">{suggestion.title}</p>
+                          <p className="text-[11px] text-[var(--text-secondary)] mb-2">{suggestion.detail}</p>
+                          <div className="space-y-1">
+                            {suggestion.candidates.map((candidate) => (
+                              <div key={candidate.card_code} className="flex items-center justify-between text-[11px]">
+                                <span className="truncate mr-2">{candidate.name}</span>
+                                <span className="text-[var(--text-muted)]">{candidate.card_code}</span>
+                              </div>
+                            ))}
+                            {suggestion.candidates.length === 0 && (
+                              <p className="text-[11px] text-[var(--text-muted)]">No candidate cards found in pool.</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {matchupResults.length > 0 && (
+                    <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">Matchup Simulation</p>
+                        {lastSimulatedAt && <span className="text-[10px] text-[var(--text-muted)]">{lastSimulatedAt}</span>}
+                      </div>
+                      {matchupResults.map((matchup) => (
+                        <div key={matchup.archetype} className="rounded-md border border-[var(--border-default)] p-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-medium">{matchup.archetype}</p>
+                            <span className="text-xs font-semibold">{matchup.winRate}%</span>
+                          </div>
+                          <p className="text-[11px] text-[var(--text-secondary)]">{matchup.note}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

@@ -5,9 +5,9 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { LineChart, Line, BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { mockMetaData, mockDecks, colorStats } from '../data/mockData';
 import { HeatmapGrid } from '../components/heatmap';
 import { Link } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
 
 // Sample trend data
 const trendData = [
@@ -21,11 +21,22 @@ const trendData = [
   { date: 'Feb 24', red: 65, blue: 62, green: 56, purple: 61, black: 55, yellow: 51 }
 ];
 
-const pickRateData = mockMetaData.slice(0, 8).map(d => ({
-  name: d.leader_name.split(' ').pop() || d.leader_name,
-  value: d.pick_rate,
-  color: d.color
-}));
+type RankedDeck = {
+  deck: string;
+  total_score: number;
+  entries: number;
+  wins: number;
+  win_rate_estimate: number;
+  top8_rate: number;
+  formats: string[];
+};
+
+type BestDeckResponse = {
+  overall_best_deck: RankedDeck | null;
+  top_10_ranked_decks: RankedDeck[];
+};
+
+const chartColors = ['red', 'blue', 'green', 'purple', 'black', 'yellow'] as const;
 
 const colorMap: Record<string, string> = {
   red: 'var(--accent-red)',
@@ -37,6 +48,54 @@ const colorMap: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const [metaBestDeck, setMetaBestDeck] = useState<BestDeckResponse | null>(null);
+  const [metaLoading, setMetaLoading] = useState(true);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadMeta = async () => {
+      try {
+        setMetaLoading(true);
+        setMetaError(null);
+        const response = await fetch('/meta/best-deck');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.message || 'Failed to fetch meta data');
+        if (active) setMetaBestDeck(data);
+      } catch (err) {
+        if (active) setMetaError(err instanceof Error ? err.message : 'Failed to fetch meta data');
+      } finally {
+        if (active) setMetaLoading(false);
+      }
+    };
+    void loadMeta();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const pickRateData = useMemo(
+    () =>
+      (metaBestDeck?.top_10_ranked_decks || []).slice(0, 8).map((d, index) => ({
+        name: d.deck,
+        value: d.top8_rate,
+        color: chartColors[index % chartColors.length]
+      })),
+    [metaBestDeck]
+  );
+
+  const rankedDecks = useMemo(
+    () => metaBestDeck?.top_10_ranked_decks || [],
+    [metaBestDeck]
+  );
+
+  const overallWinRate = useMemo(() => {
+    const source = metaBestDeck?.top_10_ranked_decks || [];
+    if (source.length === 0) return '0.0%';
+    const avg = source.reduce((sum, deck) => sum + (deck.win_rate_estimate || 0), 0) / source.length;
+    return `${avg.toFixed(1)}%`;
+  }, [metaBestDeck]);
+
   const heatmapData = [
     { row: 'Red Luffy', col: 'Purple Kaido', value: 48 },
     { row: 'Red Luffy', col: 'Blue Law', value: 55 },
@@ -48,38 +107,36 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Dashboard</h1>
         <p className="text-[var(--text-secondary)]">Your competitive analytics overview</p>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <KPICard
           title="Overall Win Rate"
-          value="65.2%"
-          subtitle="Last 30 days"
+          value={metaLoading ? 'Loading...' : overallWinRate}
+          subtitle="Top 10 weighted average"
           icon={Trophy}
           trend="up"
-          trendValue="+2.3%"
-          dataSource="matches.result"
+          trendValue={metaLoading ? '...' : 'API'}
+          dataSource="meta.best_deck"
         />
         <KPICard
           title="Best Color Today"
           value={<div className="flex items-center gap-2"><ColorBadge color="red" size="sm" /> Red</div>}
-          subtitle="68.5% win rate"
+          subtitle="Meta snapshot"
           icon={Star}
           trend="up"
-          trendValue="+1.2%"
-          dataSource="meta.win_rate"
+          trendValue="API"
+          dataSource="meta.best_deck"
         />
         <KPICard
-          title="Best Leader"
-          value="Monkey D. Luffy"
-          subtitle="OP01-016 · 68.5% WR"
+          title="Best Deck"
+          value={metaBestDeck?.overall_best_deck?.deck || 'N/A'}
+          subtitle={metaBestDeck?.overall_best_deck ? `${metaBestDeck.overall_best_deck.win_rate_estimate.toFixed(1)}% est WR` : 'No data'}
           icon={Target}
-          dataSource="meta.leader_code"
+          dataSource="meta.overall_best_deck"
         />
         <KPICard
           title="Worst Matchup Alert"
@@ -101,18 +158,16 @@ export default function Dashboard() {
         />
         <KPICard
           title="Meta Fit Score"
-          value="92/100"
-          subtitle="Excellent positioning"
+          value={metaBestDeck?.overall_best_deck ? `${Math.min(100, Math.round(metaBestDeck.overall_best_deck.top8_rate + 55))}/100` : 'N/A'}
+          subtitle="From best-deck API"
           icon={TrendingUp}
           trend="up"
-          trendValue="+5"
-          dataSource="decks.meta_fit_score"
+          trendValue="API"
+          dataSource="meta.top_10_ranked_decks"
         />
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Meta Trend Chart */}
         <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -132,9 +187,9 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
               <XAxis dataKey="date" stroke="var(--text-muted)" style={{ fontSize: '12px' }} />
               <YAxis stroke="var(--text-muted)" style={{ fontSize: '12px' }} />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'var(--surface-2)', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'var(--surface-2)',
                   border: '1px solid var(--border-default)',
                   borderRadius: '8px'
                 }}
@@ -146,26 +201,23 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
           <div className="mt-3 pt-3 border-t border-[var(--border-soft)]">
-            <p className="text-[10px] text-[var(--text-muted)] font-mono">
-              Data: meta.win_rate, meta.date_window
-            </p>
+            <p className="text-[10px] text-[var(--text-muted)] font-mono">Data: static trend preview</p>
           </div>
         </Card>
 
-        {/* Pick Rate Bar Chart */}
         <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
           <div className="mb-4">
-            <h3 className="font-semibold text-[var(--text-primary)]">Top Leaders - Pick Rate</h3>
-            <p className="text-xs text-[var(--text-muted)] mt-1">Current meta snapshot</p>
+            <h3 className="font-semibold text-[var(--text-primary)]">Top Decks - Top8 Rate</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-1">Current meta snapshot from API</p>
           </div>
           <ResponsiveContainer width="100%" height={250}>
             <ReBarChart data={pickRateData} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
               <XAxis type="number" stroke="var(--text-muted)" style={{ fontSize: '12px' }} />
-              <YAxis type="category" dataKey="name" stroke="var(--text-muted)" style={{ fontSize: '12px' }} width={80} />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'var(--surface-2)', 
+              <YAxis type="category" dataKey="name" stroke="var(--text-muted)" style={{ fontSize: '12px' }} width={90} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'var(--surface-2)',
                   border: '1px solid var(--border-default)',
                   borderRadius: '8px'
                 }}
@@ -178,53 +230,54 @@ export default function Dashboard() {
             </ReBarChart>
           </ResponsiveContainer>
           <div className="mt-3 pt-3 border-t border-[var(--border-soft)]">
-            <p className="text-[10px] text-[var(--text-muted)] font-mono">
-              Data: meta.pick_rate, meta.leader_name
-            </p>
+            <p className="text-[10px] text-[var(--text-muted)] font-mono">Data: /meta/best-deck {'->'} top_10_ranked_decks.top8_rate</p>
           </div>
         </Card>
       </div>
 
-      {/* Recommended Decks & Matchup Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recommended Decks */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-[var(--text-primary)]">Recommended Decks</h3>
+            <h3 className="font-semibold text-[var(--text-primary)]">Top 10 Ranked Decks</h3>
             <Link to="/deck-builder">
               <Button variant="ghost" size="sm">View All</Button>
             </Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mockDecks.map((deck) => (
-              <Card key={deck.deck_id} className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--border-soft)] transition-all cursor-pointer">
+          {metaError && <p className="text-sm text-[var(--state-destructive)] mb-3">Meta API error: {metaError}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {rankedDecks.map((deck, index) => (
+              <Card key={deck.deck} className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--border-soft)] transition-all cursor-pointer">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h4 className="font-medium text-[var(--text-primary)] mb-1">{deck.deck_name}</h4>
-                    <p className="text-xs font-mono text-[var(--text-muted)]">{deck.leader_code}</p>
+                    <h4 className="font-medium text-[var(--text-primary)] mb-1">#{index + 1} {deck.deck}</h4>
+                    <p className="text-xs font-mono text-[var(--text-muted)]">Entries: {deck.entries}</p>
                   </div>
-                  <ColorBadge color={deck.primary_color} size="sm" />
+                  <ColorBadge color={chartColors[index % chartColors.length]} size="sm" />
                 </div>
                 <div className="space-y-2 mb-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-[var(--text-secondary)]">Win Rate</span>
-                    <span className="font-medium text-[var(--state-success)]">{deck.win_rate}%</span>
+                    <span className="text-[var(--text-secondary)]">Est Win Rate</span>
+                    <span className="font-medium text-[var(--state-success)]">{deck.win_rate_estimate.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-[var(--text-secondary)]">Consistency</span>
-                    <span className="font-medium">{deck.consistency_score}/100</span>
+                    <span className="text-[var(--text-secondary)]">Top8 Rate</span>
+                    <span className="font-medium">{deck.top8_rate.toFixed(1)}%</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1">View</Button>
+                  <Link to={`/deck-analytics/${encodeURIComponent(deck.deck)}`} className="flex-1">
+                    <Button size="sm" variant="outline" className="w-full">View</Button>
+                  </Link>
                   <Button size="sm" className="flex-1">Clone</Button>
                 </div>
               </Card>
             ))}
+            {!metaLoading && rankedDecks.length === 0 && (
+              <p className="text-sm text-[var(--text-muted)]">No ranked decks found.</p>
+            )}
           </div>
         </div>
 
-        {/* Quick Actions */}
         <div>
           <h3 className="font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h3>
           <div className="space-y-3">
@@ -271,7 +324,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Matchup Heatmap Preview */}
       <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -289,9 +341,7 @@ export default function Dashboard() {
           onCellClick={(row, col) => console.log(`Clicked ${row} vs ${col}`)}
         />
         <div className="mt-3 pt-3 border-t border-[var(--border-soft)]">
-          <p className="text-[10px] text-[var(--text-muted)] font-mono">
-            Data: matches.result, decks.leader_code
-          </p>
+          <p className="text-[10px] text-[var(--text-muted)] font-mono">Data: matches.result, decks.leader_code</p>
         </div>
       </Card>
     </div>
