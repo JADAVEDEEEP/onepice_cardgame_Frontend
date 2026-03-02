@@ -4,6 +4,7 @@ import { Card } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Button } from '../components/ui/button';
 import { Share2, Download, ArrowLeft } from 'lucide-react';
+import { withApiBase } from '../data/apiBase';
 
 type DeckSummary = {
   entries: number;
@@ -76,7 +77,7 @@ export default function DeckAnalytics() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`/meta/deck/${encodeURIComponent(deckName)}`);
+        const response = await fetch(withApiBase(`/meta/deck/${encodeURIComponent(deckName)}`));
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload?.message || 'Failed to load deck analytics');

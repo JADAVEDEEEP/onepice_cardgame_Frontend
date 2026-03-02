@@ -8,6 +8,7 @@ import { LineChart, Line, BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGr
 import { HeatmapGrid } from '../components/heatmap';
 import { Link } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
+import { withApiBase } from '../data/apiBase';
 
 // Sample trend data
 const trendData = [
@@ -58,7 +59,7 @@ export default function Dashboard() {
       try {
         setMetaLoading(true);
         setMetaError(null);
-        const response = await fetch('/meta/best-deck');
+        const response = await fetch(withApiBase('/meta/best-deck'));
         const data = await response.json();
         if (!response.ok) throw new Error(data?.message || 'Failed to fetch meta data');
         if (active) setMetaBestDeck(data);

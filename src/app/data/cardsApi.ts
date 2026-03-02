@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardType, OPTCGColor } from './mockData';
+import { withApiBase } from './apiBase';
 
 interface BackendCard {
   id?: string;
@@ -19,7 +20,7 @@ interface BackendCard {
 }
 
 const DEFAULT_IMAGE_URL = 'https://placehold.co/400x560?text=Card';
-const API_URL = import.meta.env.VITE_CARDS_API_URL || '/cardsApi/cards';
+const API_URL = import.meta.env.VITE_CARDS_API_URL || withApiBase('/cardsApi/cards');
 
 function normalizeColor(value?: string): OPTCGColor {
   const normalized = (value || '').toLowerCase();
