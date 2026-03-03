@@ -20,7 +20,7 @@ interface BackendCard {
 }
 
 const DEFAULT_IMAGE_URL = 'https://placehold.co/400x560?text=Card';
-const API_URL = import.meta.env.VITE_CARDS_API_URL || withApiBase('/cardsApi/cards');
+const API_URL = withApiBase('/cardsApi/cards');
 
 function normalizeColor(value?: string): OPTCGColor {
   const normalized = (value || '').toLowerCase();
@@ -114,3 +114,4 @@ export function useCards() {
 
   return { cards, loading, error };
 }
+
