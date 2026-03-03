@@ -1,15 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ColorBadge } from '../components/color-badge';
-import { colorStats, OPTCGColor, mockCards } from '../data/mockData';
-import { Target, TrendingUp, AlertTriangle, BarChart, Sparkles, ChevronRight } from 'lucide-react';
+import { colorStats, OPTCGColor } from '../data/mockData';
+import { Target, TrendingUp, BarChart, Sparkles, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
+import { withApiBase } from '../data/apiBase';
+
+type ColorStat = {
+  color: OPTCGColor;
+  win_rate: number;
+  pick_rate: number;
+  bad_matchups_count: number;
+  consistency: number;
+  skill_floor: number;
+  skill_ceiling: number;
+  top_leaders: string[];
+  meta_fit: number;
+};
+
+type ApiReason = { type: string; text: string };
 
 export default function BestColorFinder() {
   const [dateWindow, setDateWindow] = useState('30');
@@ -18,18 +32,63 @@ export default function BestColorFinder() {
   const [goingFirst, setGoingFirst] = useState('any');
   const [budgetMode, setBudgetMode] = useState(false);
   const [metaWeight, setMetaWeight] = useState('balanced');
-
-  const sortedColors = [...colorStats].sort((a, b) => b.win_rate - a.win_rate);
-  const topColor = sortedColors[0];
-  const secondColor = sortedColors[1];
-  const thirdColor = sortedColors[2];
-  const wildcardColor = sortedColors[sortedColors.length - 2]; // Not last, second to last
+  const [apiStats, setApiStats] = useState<ColorStat[]>([]);
+  const [apiReasons, setApiReasons] = useState<ApiReason[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const getPlaystyleLabel = (value: number) => {
     if (value < 33) return 'Aggro';
     if (value < 67) return 'Midrange';
     return 'Control';
   };
+
+  const fetchBestColors = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(withApiBase('/analytics/best-color'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dateWindow,
+          format,
+          playstyle: getPlaystyleLabel(playstyle[0]).toLowerCase(),
+          goingFirst,
+          budgetMode,
+          metaWeight,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Failed to load best color data');
+      }
+
+      const stats = Array.isArray(payload?.colorStats) ? payload.colorStats : [];
+      const reasons = Array.isArray(payload?.reasons) ? payload.reasons : [];
+      setApiStats(stats);
+      setApiReasons(reasons);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load best color data');
+      setApiStats([]);
+      setApiReasons([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchBestColors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sourceStats = apiStats.length > 0 ? apiStats : colorStats;
+  const sortedColors = [...sourceStats].sort((a, b) => b.win_rate - a.win_rate);
+  const topColor = sortedColors[0] || colorStats[0];
+  const secondColor = sortedColors[1] || sortedColors[0] || colorStats[0];
+  const thirdColor = sortedColors[2] || sortedColors[1] || colorStats[0];
+  const wildcardColor = sortedColors[sortedColors.length - 2] || sortedColors[0] || colorStats[0];
 
   const getReasonIcon = (type: string) => {
     switch (type) {
@@ -40,12 +99,13 @@ export default function BestColorFinder() {
     }
   };
 
-  const reasons = [
+  const defaultReasons = [
     { type: 'matchup', text: 'Favorable against 4 of top 6 meta leaders' },
     { type: 'trend', text: 'Win rate increased 2.3% in last 7 days' },
     { type: 'consistency', text: 'High consistency score (88/100) for reliable performance' },
     { type: 'meta', text: 'Strong positioning against current meta trends' }
   ];
+  const reasons = apiReasons.length > 0 ? apiReasons : defaultReasons;
 
   return (
     <div className="space-y-6">
@@ -148,7 +208,10 @@ export default function BestColorFinder() {
               </Select>
             </div>
 
-            <Button className="w-full">Apply Filters</Button>
+            <Button className="w-full" onClick={() => void fetchBestColors()} disabled={loading}>
+              {loading ? 'Loading...' : 'Apply Filters'}
+            </Button>
+            {error && <p className="text-xs text-[var(--state-danger)]">{error}</p>}
           </div>
 
           <div className="mt-6 pt-6 border-t border-[var(--border-soft)]">
@@ -196,7 +259,9 @@ export default function BestColorFinder() {
                   <p className="font-semibold">{topColor.skill_ceiling}/10</p>
                 </div>
               </div>
-              <Button className="w-full">Generate Best Deck</Button>
+              <Link to={`/generate-deck?color=${topColor.color}`}>
+                <Button className="w-full">Generate Best Deck</Button>
+              </Link>
             </Card>
 
             {/* #2 & #3 */}
