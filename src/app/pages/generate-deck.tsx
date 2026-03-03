@@ -87,7 +87,7 @@ const isCardActive = (card: BackendCardLite) => {
 
 export default function GenerateDeck() {
   const [selectedColor, setSelectedColor] = useState<OPTCGColor | null>(null);
-  const [selectedLeaderCode, setSelectedLeaderCode] = useState('any');
+  const [selectedLeaderCode, setSelectedLeaderCode] = useState('');
   const [leaderPool, setLeaderPool] = useState<LeaderOption[]>([]);
   const [playstyle, setPlaystyle] = useState<Playstyle>('balanced');
   const [metaContext, setMetaContext] = useState<MetaContext>('balanced');
@@ -144,9 +144,9 @@ export default function GenerateDeck() {
   }, [leaderPool, selectedColor]);
 
   useEffect(() => {
-    if (selectedLeaderCode === 'any') return;
+    if (!selectedLeaderCode) return;
     if (!filteredLeaders.some((leader) => leader.code === selectedLeaderCode)) {
-      setSelectedLeaderCode('any');
+      setSelectedLeaderCode('');
     }
   }, [filteredLeaders, selectedLeaderCode]);
 
@@ -160,7 +160,7 @@ export default function GenerateDeck() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           color: selectedColor,
-          leader: selectedLeaderCode === 'any' ? '' : selectedLeaderCode,
+          leader: selectedLeaderCode,
           playstyle,
           metaContext,
           riskMode,
@@ -229,9 +229,12 @@ export default function GenerateDeck() {
             <select
               value={selectedLeaderCode}
               onChange={(e) => setSelectedLeaderCode(e.target.value)}
+              disabled={!selectedColor}
               className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--border-soft)] focus:ring-2 focus:ring-[var(--ring)]"
             >
-              <option value="any">Any Leader</option>
+              <option value="">
+                {selectedColor ? 'Auto Select Best Leader' : 'Select color first'}
+              </option>
               {filteredLeaders.map((leader) => (
                 <option key={leader.code} value={leader.code}>
                   {leader.name} ({leader.code})
