@@ -89,6 +89,7 @@ export default function BestColorFinder() {
   const secondColor = sortedColors[1] || sortedColors[0] || colorStats[0];
   const thirdColor = sortedColors[2] || sortedColors[1] || colorStats[0];
   const wildcardColor = sortedColors[sortedColors.length - 2] || sortedColors[0] || colorStats[0];
+  const topPreferredLeader = topColor?.top_leaders?.[0] || '';
 
   const getReasonIcon = (type: string) => {
     switch (type) {
@@ -259,7 +260,12 @@ export default function BestColorFinder() {
                   <p className="font-semibold">{topColor.skill_ceiling}/10</p>
                 </div>
               </div>
-              <Link to={`/generate-deck?color=${topColor.color}`}>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                Preferred Leader: <span className="font-mono text-[var(--text-primary)]">{topPreferredLeader || 'Auto-select'}</span>
+              </p>
+              <Link
+                to={`/generate-deck?color=${topColor.color}${topPreferredLeader ? `&leader=${encodeURIComponent(topPreferredLeader)}` : ''}`}
+              >
                 <Button className="w-full">Generate Best Deck</Button>
               </Link>
             </Card>

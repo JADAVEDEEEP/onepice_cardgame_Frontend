@@ -40,6 +40,25 @@ interface GeneratedDeckResponse {
   matchupPreview: Array<{ leader: string; winRate: number }>;
 }
 
+interface BackendCardLite {
+  id?: string;
+  name?: string;
+  category?: string;
+  colors?: string[];
+  tournament_status?: string;
+  tournamentStatus?: string;
+  status?: string;
+  legality?: string;
+  is_banned?: boolean;
+  banned?: boolean;
+}
+
+interface LeaderOption {
+  code: string;
+  name: string;
+  color: OPTCGColor;
+}
+
 const colorOptions: { color: OPTCGColor; label: string }[] = [
   { color: 'red', label: 'Red' },
   { color: 'blue', label: 'Blue' },
@@ -49,19 +68,27 @@ const colorOptions: { color: OPTCGColor; label: string }[] = [
   { color: 'yellow', label: 'Yellow' },
 ];
 
-const leaders = [
-  'Any Leader',
-  'Monkey D. Luffy',
-  'Kaido',
-  'Charlotte Katakuri',
-  'Eustass Kid',
-  'Donquixote Doflamingo',
-  'Boa Hancock',
-];
+const normalizeText = (value: unknown) => String(value || '').trim().toLowerCase();
+
+const normalizeColor = (value?: string): OPTCGColor | null => {
+  const normalized = normalizeText(value);
+  if (['red', 'blue', 'green', 'purple', 'black', 'yellow'].includes(normalized)) {
+    return normalized as OPTCGColor;
+  }
+  return null;
+};
+
+const isCardActive = (card: BackendCardLite) => {
+  const status = normalizeText(card.tournament_status || card.tournamentStatus || card.status || card.legality);
+  if (status.includes('banned') || status.includes('forbidden') || status.includes('suspended')) return false;
+  if (card.is_banned === true || card.banned === true) return false;
+  return true;
+};
 
 export default function GenerateDeck() {
   const [selectedColor, setSelectedColor] = useState<OPTCGColor | null>(null);
-  const [selectedLeader, setSelectedLeader] = useState('Any Leader');
+  const [selectedLeaderCode, setSelectedLeaderCode] = useState('any');
+  const [leaderPool, setLeaderPool] = useState<LeaderOption[]>([]);
   const [playstyle, setPlaystyle] = useState<Playstyle>('balanced');
   const [metaContext, setMetaContext] = useState<MetaContext>('balanced');
   const [riskMode, setRiskMode] = useState<RiskMode>('consistency');
@@ -72,10 +99,56 @@ export default function GenerateDeck() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const color = (params.get('color') || '').toLowerCase() as OPTCGColor;
+    const leader = (params.get('leader') || '').trim();
     if (colorOptions.some((option) => option.color === color)) {
       setSelectedColor(color);
     }
+    if (leader) setSelectedLeaderCode(leader);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadLeaders = async () => {
+      try {
+        const response = await fetch(withApiBase('/cardsApi/cards'));
+        if (!response.ok) return;
+        const payload = await response.json();
+        const list = Array.isArray(payload) ? payload : Array.isArray(payload?.cards) ? payload.cards : [];
+        const mapped = list
+          .filter((card: BackendCardLite) => normalizeText(card.category) === 'leader' && isCardActive(card))
+          .map((card: BackendCardLite) => {
+            const color = normalizeColor(card.colors?.[0]);
+            if (!color || !card.id || !card.name) return null;
+            return { code: card.id, name: card.name, color };
+          })
+          .filter(Boolean) as LeaderOption[];
+
+        const unique = Array.from(new Map(mapped.map((item) => [item.code, item])).values());
+        if (mounted) setLeaderPool(unique);
+      } catch {
+        if (mounted) setLeaderPool([]);
+      }
+    };
+
+    void loadLeaders();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredLeaders = useMemo(() => {
+    if (!selectedColor) return [];
+    return leaderPool
+      .filter((leader) => leader.color === selectedColor)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [leaderPool, selectedColor]);
+
+  useEffect(() => {
+    if (selectedLeaderCode === 'any') return;
+    if (!filteredLeaders.some((leader) => leader.code === selectedLeaderCode)) {
+      setSelectedLeaderCode('any');
+    }
+  }, [filteredLeaders, selectedLeaderCode]);
 
   const handleGenerate = async () => {
     if (!selectedColor) return;
@@ -87,7 +160,7 @@ export default function GenerateDeck() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           color: selectedColor,
-          leader: selectedLeader === 'Any Leader' ? '' : selectedLeader,
+          leader: selectedLeaderCode === 'any' ? '' : selectedLeaderCode,
           playstyle,
           metaContext,
           riskMode,
@@ -154,16 +227,20 @@ export default function GenerateDeck() {
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--text-primary)]">Preferred Leader (Optional)</label>
             <select
-              value={selectedLeader}
-              onChange={(e) => setSelectedLeader(e.target.value)}
+              value={selectedLeaderCode}
+              onChange={(e) => setSelectedLeaderCode(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border-default)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--border-soft)] focus:ring-2 focus:ring-[var(--ring)]"
             >
-              {leaders.map((leader) => (
-                <option key={leader} value={leader}>
-                  {leader}
+              <option value="any">Any Leader</option>
+              {filteredLeaders.map((leader) => (
+                <option key={leader.code} value={leader.code}>
+                  {leader.name} ({leader.code})
                 </option>
               ))}
             </select>
+            {selectedColor && filteredLeaders.length === 0 && (
+              <p className="text-xs text-[var(--text-muted)]">No active leaders found for this color.</p>
+            )}
           </div>
 
           <div className="space-y-2">
