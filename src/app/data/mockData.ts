@@ -19,6 +19,8 @@ export interface Card {
   rarity: string;
   set_code: string;
   image_url: string;
+  tournament_status?: 'active' | 'banned' | 'unknown';
+  is_active?: boolean;
 }
 
 export interface DeckCard {

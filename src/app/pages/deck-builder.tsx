@@ -9,6 +9,7 @@ import { Switch } from '../components/ui/switch';
 import { CardTile } from '../components/card-tile';
 import { Card as CardType } from '../data/mockData';
 import { useCards } from '../data/cardsApi';
+import { withApiBase } from '../data/apiBase';
 import { Search, Filter, Save, Download, Sparkles, BarChart3, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -25,6 +26,64 @@ type MatchupResult = {
   note: string;
 };
 
+type DeckPowerReport = {
+  score: number;
+  tier: 'S' | 'A' | 'B' | 'C' | 'D';
+  breakdown: {
+    fill_score: number;
+    counter_score: number;
+    early_curve_score: number;
+    event_balance_score: number;
+    cost_balance_score: number;
+    leader_score: number;
+  };
+};
+
+type OptimizeAnalysis = {
+  costCurve?: {
+    phases?: {
+      earlyGame?: { count: number; percent: number };
+      midGame?: { count: number; percent: number };
+      lateGame?: { count: number; percent: number };
+    };
+    issues?: string[];
+  };
+  roleBreakdown?: {
+    typeCounts?: { characters: number; events: number; stages: number };
+    roleCounts?: {
+      blockers: number;
+      removal: number;
+      searchers: number;
+      finishers: number;
+      draw: number;
+      boardControl: number;
+    };
+    missingRoles?: string[];
+  };
+  synergyScore?: { score: number; archetype?: string };
+  consistencyScore?: { score: number };
+  metaFitScore?: {
+    score: number;
+    byLeader?: Array<{ metaLeader: string; estimatedWinRate: number; confidence: string }>;
+  };
+  weaknesses?: string[];
+  targetPlan?: {
+    archetype: string;
+    targets: Record<string, number>;
+  };
+  nextBestSwaps?: Array<{
+    remove: { cardName: string; cardId: string };
+    add: { cardName: string; cardId: string };
+    reason: string;
+    expectedImpact: number;
+  }>;
+  recommendedCards?: Array<{
+    cardName: string;
+    cardId: string;
+    explanation: string;
+  }>;
+};
+
 export default function DeckBuilder() {
   const [selectedLeader, setSelectedLeader] = useState<CardType | null>(null);
   const [deckCards, setDeckCards] = useState<Map<string, number>>(new Map());
@@ -34,7 +93,11 @@ export default function DeckBuilder() {
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(90);
   const [optimizeSuggestions, setOptimizeSuggestions] = useState<OptimizeSuggestion[]>([]);
+  const [optimizeAnalysis, setOptimizeAnalysis] = useState<OptimizeAnalysis | null>(null);
   const [matchupResults, setMatchupResults] = useState<MatchupResult[]>([]);
+  const [deckPowerReport, setDeckPowerReport] = useState<DeckPowerReport | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizeStatus, setOptimizeStatus] = useState<string | null>(null);
   const [lastOptimizedAt, setLastOptimizedAt] = useState<string | null>(null);
   const [lastSimulatedAt, setLastSimulatedAt] = useState<string | null>(null);
   const { cards, loading, error } = useCards();
@@ -156,7 +219,114 @@ export default function DeckBuilder() {
     setTypeFilter('all');
   };
 
-  const createOptimizeSuggestions = () => {
+  const createOptimizeSuggestions = async () => {
+    if (totalCards === 0) {
+      setOptimizeStatus('Add cards first, then run optimize.');
+      return;
+    }
+
+    setOptimizing(true);
+    setOptimizeStatus('Running optimizer...');
+    try {
+      const payload = {
+        leader: selectedLeader
+          ? {
+              card_code: selectedLeader.card_code,
+              name: selectedLeader.name,
+              color: selectedLeader.color,
+              type: selectedLeader.type,
+              cost: selectedLeader.cost,
+              power: selectedLeader.power,
+              counter: selectedLeader.counter_value,
+              effect: selectedLeader.text_effect
+            }
+          : null,
+        deck_size: totalCards,
+        decklist: Array.from(deckCards.entries()).map(([card_code, count]) => {
+          const card = cardByCode.get(card_code);
+          return {
+            card_code,
+            count,
+            card: {
+              card_code,
+              id: card_code,
+              name: card?.name || card_code,
+              cost: card?.cost || 0,
+              power: card?.power || 0,
+              type: card?.type || 'character',
+              color: card?.color || 'red',
+              counter: card?.counter_value || 0,
+              effect: card?.text_effect || '',
+              rarity: card?.rarity || '-',
+              set_code: card?.set_code || 'SET',
+              image_url: card?.image_url || ''
+            }
+          };
+        })
+      };
+
+      const response = await fetch(withApiBase('/analytics/optimize'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Optimize API failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      setOptimizeAnalysis(data as OptimizeAnalysis);
+      if (data?.deck_power) {
+        setDeckPowerReport(data.deck_power as DeckPowerReport);
+      }
+      setOptimizeStatus('Optimizer API result loaded.');
+      const apiSuggestions: OptimizeSuggestion[] = Array.isArray(data?.suggestions)
+        ? data.suggestions.map((item: any) => ({
+            title: String(item?.title || 'Suggestion'),
+            detail: String(item?.detail || ''),
+            candidates: Array.isArray(item?.candidates)
+              ? item.candidates.map((candidate: any) => ({
+                  card_code: String(candidate?.card_code || candidate?.id || ''),
+                  name: String(candidate?.name || 'Unknown'),
+                  color: candidate?.color || 'red',
+                  type: candidate?.type || 'character',
+                  cost: Number(candidate?.cost) || 0,
+                  power: Number(candidate?.power) || 0,
+                  counter_value: Number(candidate?.counter_value) || 0,
+                  traits: Array.isArray(candidate?.traits) ? candidate.traits : [],
+                  text_effect: String(candidate?.text_effect || ''),
+                  rarity: String(candidate?.rarity || '-'),
+                  set_code: String(candidate?.set_code || 'SET'),
+                  image_url: String(candidate?.image_url || '')
+                }))
+              : []
+          }))
+        : [];
+
+      if (apiSuggestions.length > 0) {
+        setOptimizeSuggestions(apiSuggestions);
+      } else {
+        setOptimizeSuggestions([
+          {
+            title: 'No API Suggestions',
+            detail: 'Optimizer ran but returned no suggestions.',
+            candidates: []
+          }
+        ]);
+      }
+
+      setLastOptimizedAt(new Date().toLocaleTimeString());
+      return;
+    } catch (error) {
+      // Fallback to local heuristics if API call fails.
+      console.error('Optimize API failed, using local logic:', error);
+      setOptimizeStatus('API failed, using local optimization logic.');
+      setOptimizeAnalysis(null);
+    } finally {
+      setOptimizing(false);
+    }
+
     const localCounts = deckCards;
     const sameColorPool = cards.filter((card) => {
       if (card.type === 'leader') return false;
@@ -210,6 +380,25 @@ export default function DeckBuilder() {
     }
 
     setOptimizeSuggestions(suggestions);
+    const localDeckPower = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(consistencyEstimate * 0.55 + counterDensity * 0.2 + curveCoverageScore * 0.15 + (selectedLeader ? 10 : 0))
+      )
+    );
+    setDeckPowerReport({
+      score: localDeckPower,
+      tier: localDeckPower >= 85 ? 'S' : localDeckPower >= 70 ? 'A' : localDeckPower >= 55 ? 'B' : localDeckPower >= 40 ? 'C' : 'D',
+      breakdown: {
+        fill_score: Math.round((totalCards / 50) * 100),
+        counter_score: counterDensity,
+        early_curve_score: Math.round((lowCostCards / Math.max(totalCards, 1)) * 100),
+        event_balance_score: Math.round((typeCounts.event / Math.max(totalCards, 1)) * 100),
+        cost_balance_score: Math.max(0, 100 - Math.round(Math.abs(avgCost - 3.2) * 25)),
+        leader_score: selectedLeader ? 100 : 60
+      }
+    });
     setLastOptimizedAt(new Date().toLocaleTimeString());
   };
 
@@ -529,6 +718,26 @@ export default function DeckBuilder() {
               <TabsContent value="analytics" className="mt-4">
                 <div className="space-y-3">
                   <div className="p-3 bg-[var(--surface-2)] rounded-lg">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs text-[var(--text-muted)]">Deck Power</p>
+                      <span className="text-xs font-semibold">
+                        {deckPowerReport ? `${deckPowerReport.tier} Tier` : 'Run Optimize'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[var(--state-success)]"
+                          style={{ width: `${deckPowerReport?.score ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-semibold">{deckPowerReport?.score ?? 0}/100</span>
+                    </div>
+                    {optimizeStatus && (
+                      <p className="mt-1 text-[10px] text-[var(--text-muted)]">{optimizeStatus}</p>
+                    )}
+                  </div>
+                  <div className="p-3 bg-[var(--surface-2)] rounded-lg">
                     <p className="text-xs text-[var(--text-muted)] mb-1">Consistency Estimate</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
@@ -577,14 +786,114 @@ export default function DeckBuilder() {
                       <div className="flex justify-between"><span>Yellow</span><span>{colorCounts.yellow}</span></div>
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full" onClick={createOptimizeSuggestions}>
+                  <Button variant="outline" className="w-full" onClick={createOptimizeSuggestions} disabled={optimizing}>
                     <Sparkles className="w-4 h-4 mr-2" />
-                    Optimize Deck
+                    {optimizing ? 'Optimizing...' : 'Optimize Deck'}
                   </Button>
                   <Button variant="outline" className="w-full" onClick={simulateMatchups}>
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Simulate Matchups
                   </Button>
+                  {optimizeAnalysis && (
+                    <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-3">
+                      <p className="text-xs font-semibold text-[var(--text-primary)]">API Deck Analysis</p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="rounded border border-[var(--border-default)] p-2 text-center">
+                          <p className="text-[10px] text-[var(--text-muted)]">Synergy</p>
+                          <p className="font-semibold">{optimizeAnalysis.synergyScore?.score ?? 0}/100</p>
+                        </div>
+                        <div className="rounded border border-[var(--border-default)] p-2 text-center">
+                          <p className="text-[10px] text-[var(--text-muted)]">Consistency</p>
+                          <p className="font-semibold">{optimizeAnalysis.consistencyScore?.score ?? 0}/100</p>
+                        </div>
+                        <div className="rounded border border-[var(--border-default)] p-2 text-center">
+                          <p className="text-[10px] text-[var(--text-muted)]">Meta Fit</p>
+                          <p className="font-semibold">{optimizeAnalysis.metaFitScore?.score ?? 0}/100</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded border border-[var(--border-default)] p-2">
+                        <p className="text-xs font-medium mb-1">Cost Curve (API)</p>
+                        <div className="grid grid-cols-3 gap-2 text-[11px]">
+                          <div className="flex justify-between"><span>Early</span><span>{optimizeAnalysis.costCurve?.phases?.earlyGame?.percent ?? 0}%</span></div>
+                          <div className="flex justify-between"><span>Mid</span><span>{optimizeAnalysis.costCurve?.phases?.midGame?.percent ?? 0}%</span></div>
+                          <div className="flex justify-between"><span>Late</span><span>{optimizeAnalysis.costCurve?.phases?.lateGame?.percent ?? 0}%</span></div>
+                        </div>
+                        {(optimizeAnalysis.costCurve?.issues?.length ?? 0) > 0 && (
+                          <p className="mt-1 text-[11px] text-[var(--text-secondary)]">
+                            Issue: {optimizeAnalysis.costCurve?.issues?.[0]}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="rounded border border-[var(--border-default)] p-2">
+                        <p className="text-xs font-medium mb-1">Role Breakdown (API)</p>
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="flex justify-between"><span>Character</span><span>{optimizeAnalysis.roleBreakdown?.typeCounts?.characters ?? 0}</span></div>
+                          <div className="flex justify-between"><span>Event</span><span>{optimizeAnalysis.roleBreakdown?.typeCounts?.events ?? 0}</span></div>
+                          <div className="flex justify-between"><span>Stage</span><span>{optimizeAnalysis.roleBreakdown?.typeCounts?.stages ?? 0}</span></div>
+                          <div className="flex justify-between"><span>Blockers</span><span>{optimizeAnalysis.roleBreakdown?.roleCounts?.blockers ?? 0}</span></div>
+                          <div className="flex justify-between"><span>Removal</span><span>{optimizeAnalysis.roleBreakdown?.roleCounts?.removal ?? 0}</span></div>
+                          <div className="flex justify-between"><span>Searchers</span><span>{optimizeAnalysis.roleBreakdown?.roleCounts?.searchers ?? 0}</span></div>
+                        </div>
+                      </div>
+
+                      {(optimizeAnalysis.weaknesses?.length ?? 0) > 0 && (
+                        <div className="rounded border border-[var(--border-default)] p-2">
+                          <p className="text-xs font-medium mb-1">Detected Weaknesses</p>
+                          <div className="space-y-1">
+                            {optimizeAnalysis.weaknesses?.slice(0, 5).map((weak) => (
+                              <p key={weak} className="text-[11px] text-[var(--text-secondary)]">- {weak}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {optimizeAnalysis.targetPlan && (
+                        <div className="rounded border border-[var(--border-default)] p-2">
+                          <p className="text-xs font-medium mb-1">
+                            Target Plan ({optimizeAnalysis.targetPlan.archetype})
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            {Object.entries(optimizeAnalysis.targetPlan.targets).map(([key, value]) => (
+                              <div key={key} className="flex justify-between">
+                                <span>{key.replace(/_/g, ' ')}</span>
+                                <span>{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {(optimizeAnalysis.nextBestSwaps?.length ?? 0) > 0 && (
+                        <div className="rounded border border-[var(--border-default)] p-2">
+                          <p className="text-xs font-medium mb-1">Next Best Swaps</p>
+                          <div className="space-y-2">
+                            {optimizeAnalysis.nextBestSwaps?.slice(0, 3).map((swap, idx) => (
+                              <div key={`${swap.add.cardId}-${swap.remove.cardId}-${idx}`} className="text-[11px]">
+                                <p className="font-medium">{swap.remove.cardId} {'->'} {swap.add.cardId}</p>
+                                <p className="text-[var(--text-secondary)]">{swap.reason} ({swap.expectedImpact})</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {(optimizeAnalysis.recommendedCards?.length ?? 0) > 0 && (
+                        <div className="rounded border border-[var(--border-default)] p-2">
+                          <p className="text-xs font-medium mb-1">Recommended Cards</p>
+                          <div className="space-y-2">
+                            {optimizeAnalysis.recommendedCards?.slice(0, 5).map((rec) => (
+                              <div key={rec.cardId} className="text-[11px]">
+                                <p className="font-medium">{rec.cardName} ({rec.cardId})</p>
+                                <p className="text-[var(--text-secondary)]">{rec.explanation}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {optimizeSuggestions.length > 0 && (
                     <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-3">
                       <div className="flex items-center justify-between">

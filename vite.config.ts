@@ -3,7 +3,7 @@ import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
-const backendTarget = 'https://onepice-cardgame.onrender.com'
+const backendTarget = 'http://localhost:3000'
 
 export default defineConfig({
   plugins: [

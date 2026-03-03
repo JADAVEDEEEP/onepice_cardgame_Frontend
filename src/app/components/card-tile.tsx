@@ -133,6 +133,20 @@ export function CardTile({ card, onAdd, onRemove, count = 0, synergy, compact = 
           <span className="text-xs px-2 py-0.5 bg-[var(--surface-2)] rounded text-[var(--text-secondary)]">
             {card.type}
           </span>
+          {card.tournament_status && (
+            <span
+              className={cn(
+                "text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wide",
+                card.tournament_status === "banned"
+                  ? "bg-red-500/20 text-red-400"
+                  : card.tournament_status === "active"
+                  ? "bg-green-500/20 text-green-400"
+                  : "bg-[var(--surface-2)] text-[var(--text-muted)]"
+              )}
+            >
+              {card.tournament_status}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)] mb-3">
