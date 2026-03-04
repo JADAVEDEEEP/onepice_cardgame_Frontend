@@ -180,6 +180,31 @@ export default function DeckCompare() {
   const aWins = statsComparison.filter((row) => row.winner === 'A').length;
   const bWins = statsComparison.filter((row) => row.winner === 'B').length;
 
+  const recommendationA = useMemo(() => {
+    if (!metricsA || !metricsB || !deckA) return [];
+    const bullets: string[] = [];
+    if (metricsA.winRate > metricsB.winRate) bullets.push(`Higher estimated win rate (${metricsA.winRate.toFixed(1)}%) than ${deckB?.deck || 'Deck B'}.`);
+    if (metricsA.consistency > metricsB.consistency) bullets.push(`More stable consistency profile (${metricsA.consistency}/100).`);
+    if (metricsA.metaFit > metricsB.metaFit) bullets.push(`Better current meta fit score (${metricsA.metaFit}/100).`);
+    if (metricsA.tempo > metricsB.tempo) bullets.push(`Stronger tempo pressure for faster match pace.`);
+    if (metricsA.resilience > metricsB.resilience) bullets.push(`Better resilience in long sets and grind games.`);
+    if (bullets.length === 0) bullets.push(`${deckA.deck} is a balanced alternative if you prefer its play pattern.`);
+    return bullets.slice(0, 4);
+  }, [metricsA, metricsB, deckA, deckB]);
+
+  const recommendationB = useMemo(() => {
+    if (!metricsA || !metricsB || !deckB) return [];
+    const bullets: string[] = [];
+    if (metricsB.winRate > metricsA.winRate) bullets.push(`Higher estimated win rate (${metricsB.winRate.toFixed(1)}%) than ${deckA?.deck || 'Deck A'}.`);
+    if (metricsB.consistency > metricsA.consistency) bullets.push(`More stable consistency profile (${metricsB.consistency}/100).`);
+    if (metricsB.metaFit > metricsA.metaFit) bullets.push(`Better current meta fit score (${metricsB.metaFit}/100).`);
+    if (metricsB.tempo > metricsA.tempo) bullets.push(`Stronger tempo pressure for proactive rounds.`);
+    if (metricsB.resilience > metricsA.resilience) bullets.push(`Better resilience under long-round pressure.`);
+    if (metricsB.skill > metricsA.skill) bullets.push(`Higher skill ceiling for advanced pilot optimization.`);
+    if (bullets.length === 0) bullets.push(`${deckB.deck} is a balanced alternative if you prefer its matchup spread.`);
+    return bullets.slice(0, 4);
+  }, [metricsA, metricsB, deckA, deckB]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -272,10 +297,9 @@ export default function DeckCompare() {
               <p className="font-semibold text-[var(--text-primary)]">Choose Deck A if...</p>
             </div>
             <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
-              <li>- You prefer higher current win-rate profile</li>
-              <li>- You want stronger short-term meta fit</li>
-              <li>- You value consistency in repeated events</li>
-              <li>- You want safer ladder/tournament pick</li>
+              {recommendationA.map((line) => (
+                <li key={line}>- {line}</li>
+              ))}
             </ul>
             <p className="mt-3 text-xs text-[var(--text-muted)]">Metric lead: {aWins} categories</p>
           </div>
@@ -285,10 +309,9 @@ export default function DeckCompare() {
               <p className="font-semibold text-[var(--text-primary)]">Choose Deck B if...</p>
             </div>
             <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
-              <li>- You are comfortable with higher skill complexity</li>
-              <li>- You prefer resilience in long rounds</li>
-              <li>- You want alternative meta angle</li>
-              <li>- You plan to target specific matchups</li>
+              {recommendationB.map((line) => (
+                <li key={line}>- {line}</li>
+              ))}
             </ul>
             <p className="mt-3 text-xs text-[var(--text-muted)]">Metric lead: {bWins} categories</p>
           </div>
