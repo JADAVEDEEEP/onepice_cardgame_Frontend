@@ -19,6 +19,7 @@ type RankedDeck = {
 };
 
 type BestDeckResponse = {
+  ranked_decks?: RankedDeck[];
   top_10_ranked_decks: RankedDeck[];
 };
 
@@ -80,12 +81,16 @@ export default function DeckCompare() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(withApiBase('/meta/best-deck'));
+        const response = await fetch(withApiBase('/meta/best-deck?limit=all'));
         const payload: BestDeckResponse = await response.json();
         if (!response.ok) {
           throw new Error((payload as { message?: string })?.message || 'Failed to load deck options');
         }
-        const options = Array.isArray(payload?.top_10_ranked_decks) ? payload.top_10_ranked_decks : [];
+        const options = Array.isArray(payload?.ranked_decks)
+          ? payload.ranked_decks
+          : Array.isArray(payload?.top_10_ranked_decks)
+          ? payload.top_10_ranked_decks
+          : [];
         if (!mounted) return;
         setDeckOptions(options);
         setDeckAName(options[0]?.deck || '');
