@@ -73,6 +73,50 @@ export default function MatchupMatrix() {
     [matrixData, selectedMatchup]
   );
 
+  const top8Delta = (selectedDeckA?.top8_rate ?? 0) - (selectedDeckB?.top8_rate ?? 0);
+  const avgPlacementDelta = (selectedDeckB?.avg_placement ?? 20) - (selectedDeckA?.avg_placement ?? 20);
+  const matrixWinRate = selectedCell?.value ?? 50;
+  const sampleSize = selectedCell?.sampleSize ?? 0;
+  const confidence = sampleSize >= 25 ? 'high' : sampleSize >= 12 ? 'medium' : 'low';
+
+  const dynamicWinCondition = useMemo(() => {
+    if (!selectedDeckA || !selectedDeckB) return 'Deck A ko edge tab milti hai jab opening tempo clean rahe.';
+    if (matrixWinRate >= 60 && top8Delta >= 0) {
+      return `${selectedDeckA.deck} ko strong edge milti hai jab early board presence banaye rakhe aur ${selectedDeckB.deck} ko react karne par majboor kare.`;
+    }
+    if (matrixWinRate >= 55) {
+      return `${selectedDeckA.deck} stable line tab banata hai jab mid turns me pressure + value dono maintain kiye jaye.`;
+    }
+    return `${selectedDeckA.deck} ko win lane ke liye disciplined curve aur key turns par efficient trades chahiye.`;
+  }, [selectedDeckA, selectedDeckB, matrixWinRate, top8Delta]);
+
+  const dynamicLossCondition = useMemo(() => {
+    if (!selectedDeckA || !selectedDeckB) return 'Agar opponent game drag kare to matchup flip ho sakta hai.';
+    if (matrixWinRate <= 45) {
+      return `${selectedDeckB.deck} ka control tempo ${selectedDeckA.deck} ko late turns me out-value kar sakta hai, especially jab early pressure fail ho.`;
+    }
+    if (avgPlacementDelta < 0) {
+      return `Agar ${selectedDeckA.deck} key turns miss kare to ${selectedDeckB.deck} placement-consistency advantage ke through game lock kar sakta hai.`;
+    }
+    return `Agar ${selectedDeckB.deck} lambi game force kare aur removal exchanges better kare to edge swing ho sakti hai.`;
+  }, [selectedDeckA, selectedDeckB, matrixWinRate, avgPlacementDelta]);
+
+  const dynamicPlayPatterns = useMemo(() => {
+    if (!selectedDeckA || !selectedDeckB) return [];
+    const list = [];
+    if (matrixWinRate >= 55) list.push('Mulligan me proactive starts prioritize karo taaki opening pressure lose na ho.');
+    else list.push('Mulligan me defensive + stable hand rakho aur high-risk starts avoid karo.');
+
+    if (top8Delta >= 0) list.push(`Mid game me ${selectedDeckA.deck} ka proven line follow karo: low-variance sequencing pe focus rakho.`);
+    else list.push(`Mid game me ${selectedDeckB.deck} ke power spike turns ko respect karo aur resources conserve karo.`);
+
+    if (avgPlacementDelta >= 0) list.push('Closing turns me tempo convert karke game jaldi finish karo, extra grind avoid karo.');
+    else list.push('Game ko long kheechne se pehle value parity ensure karo, warna late swing ka risk badhega.');
+
+    list.push(`Confidence ${confidence} hai, isliye ${confidence === 'low' ? 'matchup ko testing ke saath pilot karo.' : 'current line ko tournament prep me use kar sakte ho.'}`);
+    return list;
+  }, [selectedDeckA, selectedDeckB, matrixWinRate, top8Delta, avgPlacementDelta, confidence]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -146,6 +190,7 @@ export default function MatchupMatrix() {
                 <p className="text-sm text-[var(--text-muted)] mb-2">Estimated Win Rate</p>
                 <p className="text-4xl font-bold text-[var(--text-primary)]">{selectedCell?.value ?? 50}%</p>
                 <p className="text-xs text-[var(--text-muted)] mt-1">Based on {selectedCell?.sampleSize ?? 0} weighted samples</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Confidence: {confidence}</p>
               </div>
 
               <div>
@@ -153,11 +198,7 @@ export default function MatchupMatrix() {
                   <Target className="w-5 h-5 text-[var(--state-success)]" />
                   <h4 className="font-semibold text-[var(--text-primary)]">Common Win Condition</h4>
                 </div>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {selectedDeckA && selectedDeckB
-                    ? `${selectedDeckA.deck} ko edge tab milti hai jab early pressure maintain rahe aur avg placement advantage hold ho.`
-                    : 'Deck A gets edge with efficient pressure and cleaner turn curve.'}
-                </p>
+                <p className="text-sm text-[var(--text-secondary)]">{dynamicWinCondition}</p>
               </div>
 
               <div>
@@ -165,11 +206,7 @@ export default function MatchupMatrix() {
                   <AlertTriangle className="w-5 h-5 text-[var(--state-danger)]" />
                   <h4 className="font-semibold text-[var(--text-primary)]">Common Loss Condition</h4>
                 </div>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {selectedDeckA && selectedDeckB
-                    ? `Agar ${selectedDeckB.deck} lambi game force kare to matchup swing ho sakta hai.`
-                    : 'If opponent drags game and stabilizes board, advantage can flip.'}
-                </p>
+                <p className="text-sm text-[var(--text-secondary)]">{dynamicLossCondition}</p>
               </div>
 
               <div>
@@ -193,6 +230,18 @@ export default function MatchupMatrix() {
                     </span>
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-[var(--text-primary)] mb-3">Best Play Patterns</h4>
+                <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
+                  {dynamicPlayPatterns.map((line) => (
+                    <li key={line} className="flex gap-2">
+                      <span className="text-[var(--accent-blue)]">-</span>
+                      {line}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </SheetContent>
