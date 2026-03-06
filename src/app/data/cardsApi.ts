@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, CardType, OPTCGColor } from './mockData';
+import { Card, CardType, OPTCGColor } from './types';
 import { withApiBase } from './apiBase';
 
 interface BackendCard {

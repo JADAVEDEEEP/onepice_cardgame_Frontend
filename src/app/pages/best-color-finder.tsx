@@ -6,10 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
 import { ColorBadge } from '../components/color-badge';
-import { colorStats, OPTCGColor } from '../data/mockData';
 import { Target, TrendingUp, BarChart, Sparkles, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
 import { withApiBase } from '../data/apiBase';
+
+type OPTCGColor = 'red' | 'blue' | 'green' | 'purple' | 'black' | 'yellow';
 
 type ColorStat = {
   color: OPTCGColor;
@@ -34,7 +35,7 @@ export default function BestColorFinder() {
   const [metaWeight, setMetaWeight] = useState('balanced');
   const [apiStats, setApiStats] = useState<ColorStat[]>([]);
   const [apiReasons, setApiReasons] = useState<ApiReason[]>([]);
-  const [apiSource, setApiSource] = useState<string>('cards-fallback');
+  const [apiSource, setApiSource] = useState<string>('standings+tournaments');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,12 +71,12 @@ export default function BestColorFinder() {
       const reasons = Array.isArray(payload?.reasons) ? payload.reasons : [];
       setApiStats(stats);
       setApiReasons(reasons);
-      setApiSource(String(payload?.source || 'cards-fallback'));
+      setApiSource(String(payload?.source || 'standings+tournaments'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load best color data');
       setApiStats([]);
       setApiReasons([]);
-      setApiSource('cards-fallback');
+      setApiSource('error');
     } finally {
       setLoading(false);
     }
@@ -86,12 +87,11 @@ export default function BestColorFinder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sourceStats = apiStats.length > 0 ? apiStats : colorStats;
-  const sortedColors = [...sourceStats].sort((a, b) => b.win_rate - a.win_rate);
-  const topColor = sortedColors[0] || colorStats[0];
-  const secondColor = sortedColors[1] || sortedColors[0] || colorStats[0];
-  const thirdColor = sortedColors[2] || sortedColors[1] || colorStats[0];
-  const wildcardColor = sortedColors[sortedColors.length - 2] || sortedColors[0] || colorStats[0];
+  const sortedColors = [...apiStats].sort((a, b) => b.win_rate - a.win_rate);
+  const topColor = sortedColors[0] || null;
+  const secondColor = sortedColors[1] || sortedColors[0] || null;
+  const thirdColor = sortedColors[2] || sortedColors[1] || null;
+  const wildcardColor = sortedColors[sortedColors.length - 2] || sortedColors[0] || null;
   const topPreferredLeader = topColor?.top_leaders?.[0] || '';
 
   const getReasonIcon = (type: string) => {
@@ -103,13 +103,7 @@ export default function BestColorFinder() {
     }
   };
 
-  const defaultReasons = [
-    { type: 'matchup', text: 'Favorable against 4 of top 6 meta leaders' },
-    { type: 'trend', text: 'Win rate increased 2.3% in last 7 days' },
-    { type: 'consistency', text: 'High consistency score (88/100) for reliable performance' },
-    { type: 'meta', text: 'Strong positioning against current meta trends' }
-  ];
-  const reasons = apiReasons.length > 0 ? apiReasons : defaultReasons;
+  const reasons = apiReasons;
 
   return (
     <div className="space-y-6">
@@ -226,7 +220,14 @@ export default function BestColorFinder() {
 
         {/* Results Area */}
         <div className="lg:col-span-9 space-y-6">
+          {!loading && !topColor && (
+            <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
+              <p className="text-sm text-[var(--text-secondary)]">No API data available for selected filters.</p>
+            </Card>
+          )}
+
           {/* Top Recommendations */}
+          {topColor && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* #1 Recommended */}
             <Card className="p-6 bg-gradient-to-br from-[var(--accent-blue)]/10 to-transparent border-2 border-[var(--accent-blue)]">
@@ -313,8 +314,10 @@ export default function BestColorFinder() {
               </Card>
             </div>
           </div>
+          )}
 
           {/* Why This Color Wins */}
+          {topColor && (
           <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
             <div className="flex items-center gap-2 mb-4">
               <Target className="w-5 h-5 text-[var(--accent-blue)]" />
@@ -331,6 +334,7 @@ export default function BestColorFinder() {
               ))}
             </div>
           </Card>
+          )}
 
           {/* Color Comparison Table */}
           <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">

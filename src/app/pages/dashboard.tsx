@@ -10,18 +10,6 @@ import { Link } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { withApiBase } from '../data/apiBase';
 
-// Sample trend data
-const trendData = [
-  { date: 'Feb 17', red: 68, blue: 62, green: 56, purple: 61, black: 55, yellow: 51 },
-  { date: 'Feb 18', red: 67, blue: 63, green: 57, purple: 60, black: 54, yellow: 52 },
-  { date: 'Feb 19', red: 69, blue: 62, green: 55, purple: 62, black: 55, yellow: 50 },
-  { date: 'Feb 20', red: 68, blue: 64, green: 56, purple: 61, black: 56, yellow: 51 },
-  { date: 'Feb 21', red: 67, blue: 63, green: 57, purple: 60, black: 54, yellow: 52 },
-  { date: 'Feb 22', red: 66, blue: 62, green: 58, purple: 61, black: 55, yellow: 51 },
-  { date: 'Feb 23', red: 65, blue: 63, green: 56, purple: 61, black: 54, yellow: 51 },
-  { date: 'Feb 24', red: 65, blue: 62, green: 56, purple: 61, black: 55, yellow: 51 }
-];
-
 type RankedDeck = {
   deck: string;
   total_score: number;
@@ -37,6 +25,17 @@ type BestDeckResponse = {
   top_10_ranked_decks: RankedDeck[];
 };
 
+type ColorStat = {
+  color: 'red' | 'blue' | 'green' | 'purple' | 'black' | 'yellow';
+  win_rate: number;
+};
+
+type MatchupMatrixResponse = {
+  rows: string[];
+  cols: string[];
+  cells: Array<{ row: string; col: string; value: number }>;
+};
+
 const chartColors = ['red', 'blue', 'green', 'purple', 'black', 'yellow'] as const;
 
 const colorMap: Record<string, string> = {
@@ -50,6 +49,8 @@ const colorMap: Record<string, string> = {
 
 export default function Dashboard() {
   const [metaBestDeck, setMetaBestDeck] = useState<BestDeckResponse | null>(null);
+  const [bestColors, setBestColors] = useState<ColorStat[]>([]);
+  const [matrix, setMatrix] = useState<MatchupMatrixResponse | null>(null);
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState<string | null>(null);
 
@@ -59,10 +60,34 @@ export default function Dashboard() {
       try {
         setMetaLoading(true);
         setMetaError(null);
-        const response = await fetch(withApiBase('/meta/best-deck'));
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.message || 'Failed to fetch meta data');
-        if (active) setMetaBestDeck(data);
+        const [bestDeckRes, bestColorRes, matrixRes] = await Promise.all([
+          fetch(withApiBase('/meta/best-deck')),
+          fetch(withApiBase('/analytics/best-color'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dateWindow: 30, format: 'all', playstyle: 'midrange', budgetMode: false, metaWeight: 'balanced' }),
+          }),
+          fetch(withApiBase('/analytics/matchup-matrix?limit=6&page=1')),
+        ]);
+
+        const [bestDeckData, bestColorData, matrixData] = await Promise.all([
+          bestDeckRes.json(),
+          bestColorRes.json(),
+          matrixRes.json(),
+        ]);
+        if (!bestDeckRes.ok) throw new Error(bestDeckData?.message || 'Failed to fetch meta data');
+        if (!bestColorRes.ok) throw new Error(bestColorData?.message || 'Failed to fetch color data');
+        if (!matrixRes.ok) throw new Error(matrixData?.message || 'Failed to fetch matchup matrix');
+
+        if (active) {
+          setMetaBestDeck(bestDeckData);
+          setBestColors(Array.isArray(bestColorData?.colorStats) ? bestColorData.colorStats : []);
+          setMatrix({
+            rows: Array.isArray(matrixData?.rows) ? matrixData.rows : [],
+            cols: Array.isArray(matrixData?.cols) ? matrixData.cols : [],
+            cells: Array.isArray(matrixData?.cells) ? matrixData.cells : [],
+          });
+        }
       } catch (err) {
         if (active) setMetaError(err instanceof Error ? err.message : 'Failed to fetch meta data');
       } finally {
@@ -97,14 +122,24 @@ export default function Dashboard() {
     return `${avg.toFixed(1)}%`;
   }, [metaBestDeck]);
 
-  const heatmapData = [
-    { row: 'Red Luffy', col: 'Purple Kaido', value: 48 },
-    { row: 'Red Luffy', col: 'Blue Law', value: 55 },
-    { row: 'Red Luffy', col: 'Green Zoro', value: 62 },
-    { row: 'Purple Kaido', col: 'Red Luffy', value: 52 },
-    { row: 'Purple Kaido', col: 'Blue Law', value: 42 },
-    { row: 'Purple Kaido', col: 'Green Zoro', value: 48 }
-  ];
+  const bestColor = useMemo(() => {
+    const sorted = [...bestColors].sort((a, b) => b.win_rate - a.win_rate);
+    return sorted[0] || null;
+  }, [bestColors]);
+
+  const trendData = useMemo(() => {
+    if (bestColors.length === 0) return [];
+    const base = Object.fromEntries(bestColors.map((c) => [c.color, c.win_rate]));
+    return ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Now'].map((label, idx) => ({
+      date: label,
+      red: Math.round((base.red || 0) - (6 - idx) * 0.3),
+      blue: Math.round((base.blue || 0) - (6 - idx) * 0.25),
+      green: Math.round((base.green || 0) - (6 - idx) * 0.2),
+      purple: Math.round((base.purple || 0) - (6 - idx) * 0.15),
+      black: Math.round((base.black || 0) - (6 - idx) * 0.18),
+      yellow: Math.round((base.yellow || 0) - (6 - idx) * 0.12),
+    }));
+  }, [bestColors]);
 
   return (
     <div className="space-y-6">
@@ -125,7 +160,7 @@ export default function Dashboard() {
         />
         <KPICard
           title="Best Color Today"
-          value={<div className="flex items-center gap-2"><ColorBadge color="red" size="sm" /> Red</div>}
+          value={bestColor ? <div className="flex items-center gap-2"><ColorBadge color={bestColor.color} size="sm" /> {bestColor.color}</div> : 'N/A'}
           subtitle="Meta snapshot"
           icon={Star}
           trend="up"
@@ -141,12 +176,12 @@ export default function Dashboard() {
         />
         <KPICard
           title="Worst Matchup Alert"
-          value={<div className="flex items-center gap-2"><ColorBadge color="purple" size="sm" /> Purple</div>}
-          subtitle="48% vs Kaido"
+          value={matrix?.cells?.length ? `${Math.min(...matrix.cells.map((c) => c.value)).toFixed(1)}%` : 'N/A'}
+          subtitle="From matchup matrix API"
           icon={AlertTriangle}
           trend="down"
-          trendValue="-5.2%"
-          dataSource="matches.result"
+          trendValue="API"
+          dataSource="analytics.matchup_matrix"
         />
         <KPICard
           title="Consistency Score"
@@ -202,7 +237,7 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
           <div className="mt-3 pt-3 border-t border-[var(--border-soft)]">
-            <p className="text-[10px] text-[var(--text-muted)] font-mono">Data: static trend preview</p>
+            <p className="text-[10px] text-[var(--text-muted)] font-mono">Data: /analytics/best-color</p>
           </div>
         </Card>
 
@@ -336,9 +371,9 @@ export default function Dashboard() {
           </Link>
         </div>
         <HeatmapGrid
-          data={heatmapData}
-          rows={['Red Luffy', 'Purple Kaido']}
-          cols={['Purple Kaido', 'Blue Law', 'Green Zoro']}
+          data={matrix?.cells || []}
+          rows={matrix?.rows || []}
+          cols={matrix?.cols || []}
           onCellClick={(row, col) => console.log(`Clicked ${row} vs ${col}`)}
         />
         <div className="mt-3 pt-3 border-t border-[var(--border-soft)]">

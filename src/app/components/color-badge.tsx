@@ -1,5 +1,5 @@
 import { cn } from './ui/utils';
-import { OPTCGColor } from '../data/mockData';
+import { OPTCGColor } from '../data/types';
 
 interface ColorBadgeProps {
   color: OPTCGColor;

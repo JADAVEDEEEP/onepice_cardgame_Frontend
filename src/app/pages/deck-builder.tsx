@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Switch } from '../components/ui/switch';
 import { CardTile } from '../components/card-tile';
-import { Card as CardType } from '../data/mockData';
+import { Card as CardType } from '../data/types';
 import { useCards } from '../data/cardsApi';
 import { withApiBase } from '../data/apiBase';
 import { Search, Filter, Save, Download, Sparkles, BarChart3, X } from 'lucide-react';
@@ -221,6 +221,43 @@ export default function DeckBuilder() {
     setTypeFilter('all');
   };
 
+  const buildAnalyticsPayload = () => ({
+    leader: selectedLeader
+      ? {
+          card_code: selectedLeader.card_code,
+          name: selectedLeader.name,
+          color: selectedLeader.color,
+          type: selectedLeader.type,
+          cost: selectedLeader.cost,
+          power: selectedLeader.power,
+          counter: selectedLeader.counter_value,
+          effect: selectedLeader.text_effect
+        }
+      : null,
+    deck_size: totalCards,
+    decklist: Array.from(deckCards.entries()).map(([card_code, count]) => {
+      const card = cardByCode.get(card_code);
+      return {
+        card_code,
+        count,
+        card: {
+          card_code,
+          id: card_code,
+          name: card?.name || card_code,
+          cost: card?.cost || 0,
+          power: card?.power || 0,
+          type: card?.type || 'character',
+          color: card?.color || 'red',
+          counter: card?.counter_value || 0,
+          effect: card?.text_effect || '',
+          rarity: card?.rarity || '-',
+          set_code: card?.set_code || 'SET',
+          image_url: card?.image_url || ''
+        }
+      };
+    })
+  });
+
   const createOptimizeSuggestions = async () => {
     if (totalCards === 0) {
       setOptimizeStatus('Add cards first, then run optimize.');
@@ -230,47 +267,10 @@ export default function DeckBuilder() {
     setOptimizing(true);
     setOptimizeStatus('Running optimizer...');
     try {
-      const payload = {
-        leader: selectedLeader
-          ? {
-              card_code: selectedLeader.card_code,
-              name: selectedLeader.name,
-              color: selectedLeader.color,
-              type: selectedLeader.type,
-              cost: selectedLeader.cost,
-              power: selectedLeader.power,
-              counter: selectedLeader.counter_value,
-              effect: selectedLeader.text_effect
-            }
-          : null,
-        deck_size: totalCards,
-        decklist: Array.from(deckCards.entries()).map(([card_code, count]) => {
-          const card = cardByCode.get(card_code);
-          return {
-            card_code,
-            count,
-            card: {
-              card_code,
-              id: card_code,
-              name: card?.name || card_code,
-              cost: card?.cost || 0,
-              power: card?.power || 0,
-              type: card?.type || 'character',
-              color: card?.color || 'red',
-              counter: card?.counter_value || 0,
-              effect: card?.text_effect || '',
-              rarity: card?.rarity || '-',
-              set_code: card?.set_code || 'SET',
-              image_url: card?.image_url || ''
-            }
-          };
-        })
-      };
-
       const response = await fetch(withApiBase('/analytics/optimize'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(buildAnalyticsPayload())
       });
 
       if (!response.ok) {
@@ -319,132 +319,81 @@ export default function DeckBuilder() {
       }
 
       setLastOptimizedAt(new Date().toLocaleTimeString());
-      return;
     } catch (error) {
-      // Fallback to local heuristics if API call fails.
-      console.error('Optimize API failed, using local logic:', error);
-      setOptimizeStatus('API failed, using local optimization logic.');
+      console.error('Optimize API failed:', error);
+      setOptimizeStatus('Optimize API failed. Check backend and try again.');
       setOptimizeAnalysis(null);
+      setOptimizeSuggestions([]);
+      setDeckPowerReport(null);
     } finally {
       setOptimizing(false);
     }
-
-    const localCounts = deckCards;
-    const sameColorPool = cards.filter((card) => {
-      if (card.type === 'leader') return false;
-      if (!selectedLeader) return true;
-      return card.color === selectedLeader.color;
-    });
-
-    const canAdd = (card: CardType) => (localCounts.get(card.card_code) || 0) < 4;
-    const lowCostCandidates = sameColorPool
-      .filter((card) => card.type === 'character' && card.cost <= 2 && canAdd(card))
-      .sort((a, b) => (b.counter_value - a.counter_value) || (a.cost - b.cost))
-      .slice(0, 3);
-    const counterCandidates = sameColorPool
-      .filter((card) => card.counter_value >= 1000 && canAdd(card))
-      .sort((a, b) => (b.counter_value - a.counter_value) || (a.cost - b.cost))
-      .slice(0, 3);
-    const removalCandidates = sameColorPool
-      .filter((card) => card.type === 'event' && /k\.o\.|rest|trash|delete/i.test(card.text_effect) && canAdd(card))
-      .sort((a, b) => a.cost - b.cost)
-      .slice(0, 3);
-
-    const suggestions: OptimizeSuggestion[] = [];
-    if (counterDensity < 30) {
-      suggestions.push({
-        title: 'Increase Defensive Density',
-        detail: `Counter density is ${counterDensity}%. Add more +1000/+2000 counter cards to improve survivability.`,
-        candidates: counterCandidates
-      });
-    }
-    if (Math.round((lowCostCards / Math.max(totalCards, 1)) * 100) < 30) {
-      suggestions.push({
-        title: 'Improve Early Curve',
-        detail: 'Your low-cost slot is thin. Add more 1-2 cost characters for smoother turn sequencing.',
-        candidates: lowCostCandidates
-      });
-    }
-    if (typeCounts.event < Math.max(6, Math.round(totalCards * 0.12))) {
-      suggestions.push({
-        title: 'Add Utility/Removal Events',
-        detail: 'Event count is low for competitive pacing. Add flexible interaction cards.',
-        candidates: removalCandidates
-      });
-    }
-
-    if (suggestions.length === 0) {
-      suggestions.push({
-        title: 'Deck Core Looks Balanced',
-        detail: 'No major weaknesses detected. Focus on matchup-specific tech slots.',
-        candidates: sameColorPool.filter((card) => canAdd(card)).slice(0, 3)
-      });
-    }
-
-    setOptimizeSuggestions(suggestions);
-    const localDeckPower = Math.max(
-      0,
-      Math.min(
-        100,
-        Math.round(consistencyEstimate * 0.55 + counterDensity * 0.2 + curveCoverageScore * 0.15 + (selectedLeader ? 10 : 0))
-      )
-    );
-    setDeckPowerReport({
-      score: localDeckPower,
-      tier: localDeckPower >= 85 ? 'S' : localDeckPower >= 70 ? 'A' : localDeckPower >= 55 ? 'B' : localDeckPower >= 40 ? 'C' : 'D',
-      breakdown: {
-        fill_score: Math.round((totalCards / 50) * 100),
-        counter_score: counterDensity,
-        early_curve_score: Math.round((lowCostCards / Math.max(totalCards, 1)) * 100),
-        event_balance_score: Math.round((typeCounts.event / Math.max(totalCards, 1)) * 100),
-        cost_balance_score: Math.max(0, 100 - Math.round(Math.abs(avgCost - 3.2) * 25)),
-        leader_score: selectedLeader ? 100 : 60
-      }
-    });
-    setLastOptimizedAt(new Date().toLocaleTimeString());
   };
 
-  const simulateMatchups = () => {
-    const archetypes = [
-      { archetype: 'Red Aggro', color: 'red' },
-      { archetype: 'Blue Control', color: 'blue' },
-      { archetype: 'Purple Ramp', color: 'purple' },
-      { archetype: 'Black Midrange', color: 'black' },
-      { archetype: 'Green Tempo', color: 'green' },
-      { archetype: 'Yellow Life Combo', color: 'yellow' }
-    ];
+  const simulateMatchups = async () => {
+    if (totalCards === 0) {
+      setOptimizeStatus('Add cards first, then run matchup simulation.');
+      return;
+    }
 
-    const colorVsColor: Record<string, Record<string, number>> = {
-      red: { red: 0, blue: 4, purple: -3, black: 1, green: 2, yellow: 5 },
-      blue: { red: -4, blue: 0, purple: 3, black: 2, green: 1, yellow: 4 },
-      purple: { red: 3, blue: -3, purple: 0, black: 1, green: 0, yellow: -2 },
-      black: { red: -1, blue: -2, purple: -1, black: 0, green: 2, yellow: 3 },
-      green: { red: -2, blue: -1, purple: 0, black: -2, green: 0, yellow: 2 },
-      yellow: { red: -5, blue: -4, purple: 2, black: -3, green: -2, yellow: 0 }
-    };
+    setOptimizeStatus('Running matchup simulation...');
+    try {
+      const response = await fetch(withApiBase('/analytics/optimize'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildAnalyticsPayload())
+      });
 
-    const leaderColor = selectedLeader?.color || 'red';
-    const base = Math.round(
-      38 + (consistencyEstimate * 0.35) + (counterDensity * 0.15) + (curveCoverageScore * 0.12)
-    );
+      if (!response.ok) {
+        throw new Error(`Matchup API failed with status ${response.status}`);
+      }
 
-    const results: MatchupResult[] = archetypes.map((meta) => {
-      const colorMod = colorVsColor[leaderColor]?.[meta.color] || 0;
-      const sizePenalty = totalCards < 45 ? -6 : 0;
-      const lowCostMod = lowCostCards >= 12 ? 2 : -2;
-      const winRate = Math.max(25, Math.min(75, base + colorMod + sizePenalty + lowCostMod));
-      const note =
-        winRate >= 60
-          ? 'Favored if mulligan is stable.'
-          : winRate >= 50
-            ? 'Skill and sequencing matchup.'
-            : 'Needs side tech and tighter play.';
+      const data = await response.json();
+      const byLeader = data?.metaFitScore?.byLeader;
+      if (!Array.isArray(byLeader) || byLeader.length === 0) {
+        throw new Error('Matchup data missing in API response.');
+      }
 
-      return { archetype: meta.archetype, color: meta.color, winRate, note };
-    }).sort((a, b) => b.winRate - a.winRate);
+      const results: MatchupResult[] = byLeader
+        .map((row: { metaLeader: string; estimatedWinRate: number; confidence: string }) => {
+          const name = String(row?.metaLeader || 'Unknown');
+          const normalized = name.toLowerCase();
+          const color = normalized.includes('red')
+            ? 'red'
+            : normalized.includes('blue')
+              ? 'blue'
+              : normalized.includes('purple')
+                ? 'purple'
+                : normalized.includes('black')
+                  ? 'black'
+                  : normalized.includes('green')
+                    ? 'green'
+                    : normalized.includes('yellow')
+                      ? 'yellow'
+                      : 'red';
+          const confidence = String(row?.confidence || 'low').toLowerCase();
+          const note = confidence === 'high'
+            ? 'High-confidence API estimate.'
+            : confidence === 'medium'
+              ? 'Medium-confidence API estimate.'
+              : 'Low-confidence API estimate.';
+          return {
+            archetype: name,
+            color,
+            winRate: Number(row?.estimatedWinRate || 0),
+            note
+          };
+        })
+        .sort((a: MatchupResult, b: MatchupResult) => b.winRate - a.winRate);
 
-    setMatchupResults(results);
-    setLastSimulatedAt(new Date().toLocaleTimeString());
+      setMatchupResults(results);
+      setLastSimulatedAt(new Date().toLocaleTimeString());
+      setOptimizeStatus('Matchup simulation loaded from API.');
+    } catch (error) {
+      console.error('Matchup simulation API failed:', error);
+      setMatchupResults([]);
+      setOptimizeStatus('Matchup API failed. Check backend and try again.');
+    }
   };
 
   const saveDeckToApi = async () => {

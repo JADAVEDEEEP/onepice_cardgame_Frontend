@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
 import { ColorBadge } from './color-badge';
-import { Card } from '../data/mockData';
+import { Card } from '../data/types';
 
 interface CardTileProps {
   card: Card;

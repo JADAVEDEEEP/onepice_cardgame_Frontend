@@ -42,9 +42,13 @@ interface GeneratedDeckResponse {
 
 interface BackendCardLite {
   id?: string;
+  card_code?: string;
+  code?: string;
   name?: string;
   category?: string;
+  type?: string;
   colors?: string[];
+  color?: string;
   tournament_status?: string;
   tournamentStatus?: string;
   status?: string;
@@ -115,11 +119,17 @@ export default function GenerateDeck() {
         const payload = await response.json();
         const list = Array.isArray(payload) ? payload : Array.isArray(payload?.cards) ? payload.cards : [];
         const mapped = list
-          .filter((card: BackendCardLite) => normalizeText(card.category) === 'leader' && isCardActive(card))
+          .filter((card: BackendCardLite) => {
+            const cardType = normalizeText(card.category || card.type);
+            return cardType === 'leader' && isCardActive(card);
+          })
           .map((card: BackendCardLite) => {
-            const color = normalizeColor(card.colors?.[0]);
-            if (!color || !card.id || !card.name) return null;
-            return { code: card.id, name: card.name, color };
+            const firstColor = Array.isArray(card.colors) ? card.colors[0] : undefined;
+            const color = normalizeColor(firstColor || card.color);
+            const code = String(card.id || card.card_code || card.code || '').trim();
+            const name = String(card.name || '').trim();
+            if (!color || !code || !name) return null;
+            return { code, name, color };
           })
           .filter(Boolean) as LeaderOption[];
 
