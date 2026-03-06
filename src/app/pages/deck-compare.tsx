@@ -308,7 +308,9 @@ export default function DeckCompare() {
         const payload: MatrixResponse = await response.json();
         if (!response.ok) throw new Error('Failed to load field comparison');
 
-        const savedDeckName = savedOption.deckName;
+        const savedDeckName =
+          (payload as any)?.decks?.find?.((d: any) => d?.saved_deck_id === savedOption.savedDeckId || d?.is_custom)?.deck ||
+          savedOption.deckName;
         const rows = (payload.rows || []).filter((name) => name !== savedDeckName);
         const values = rows
           .map((opponent) => ({
