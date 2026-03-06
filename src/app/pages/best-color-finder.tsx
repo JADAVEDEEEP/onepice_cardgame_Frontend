@@ -34,6 +34,7 @@ export default function BestColorFinder() {
   const [metaWeight, setMetaWeight] = useState('balanced');
   const [apiStats, setApiStats] = useState<ColorStat[]>([]);
   const [apiReasons, setApiReasons] = useState<ApiReason[]>([]);
+  const [apiSource, setApiSource] = useState<string>('cards-fallback');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,10 +70,12 @@ export default function BestColorFinder() {
       const reasons = Array.isArray(payload?.reasons) ? payload.reasons : [];
       setApiStats(stats);
       setApiReasons(reasons);
+      setApiSource(String(payload?.source || 'cards-fallback'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load best color data');
       setApiStats([]);
       setApiReasons([]);
+      setApiSource('cards-fallback');
     } finally {
       setLoading(false);
     }
@@ -146,9 +149,8 @@ export default function BestColorFinder() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Formats</SelectItem>
-                  <SelectItem value="locals">Locals</SelectItem>
-                  <SelectItem value="online">Online</SelectItem>
-                  <SelectItem value="regionals">Regionals</SelectItem>
+                  <SelectItem value="OP13">OP13</SelectItem>
+                  <SelectItem value="OP14">OP14</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -217,7 +219,7 @@ export default function BestColorFinder() {
 
           <div className="mt-6 pt-6 border-t border-[var(--border-soft)]">
             <p className="text-[10px] text-[var(--text-muted)] font-mono">
-              Data: meta.win_rate, meta.pick_rate, matches.went_first
+              Data: meta.win_rate, meta.pick_rate, matches.went_first ({apiSource})
             </p>
           </div>
         </Card>
