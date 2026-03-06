@@ -123,15 +123,22 @@ export default function DeckCompare() {
       try {
         setLoading(true);
         setError(null);
-        const [bestRes, savedRes] = await Promise.all([
-          fetch(withApiBase('/meta/best-deck?limit=all')),
-          fetch(withApiBase('/decks?limit=100')),
-        ]);
+        const bestRes = await fetch(withApiBase('/meta/best-deck?limit=all'));
         const bestPayload: BestDeckResponse = await bestRes.json();
-        const savedPayload: SavedDeckListResponse = await savedRes.json();
         if (!bestRes.ok) {
           throw new Error((bestPayload as { message?: string })?.message || 'Failed to load meta deck options');
         }
+
+        let savedPayload: SavedDeckListResponse = {};
+        try {
+          const savedRes = await fetch(withApiBase('/decks?limit=100'));
+          if (savedRes.ok) {
+            savedPayload = await savedRes.json();
+          }
+        } catch {
+          savedPayload = {};
+        }
+
         const ranked = Array.isArray(bestPayload?.ranked_decks)
           ? bestPayload.ranked_decks
           : Array.isArray(bestPayload?.top_10_ranked_decks)
@@ -143,7 +150,7 @@ export default function DeckCompare() {
           source: 'meta',
           deckName: deck.deck,
         }));
-        const savedDecks = savedRes.ok && Array.isArray(savedPayload?.decks) ? savedPayload.decks : [];
+        const savedDecks = Array.isArray(savedPayload?.decks) ? savedPayload.decks : [];
         const savedOptions: DeckOption[] = savedDecks.map((deck) => ({
           key: `saved:${deck._id}`,
           label: `${stripDateFromDeckName(deck.deck_name)} (Saved)`,

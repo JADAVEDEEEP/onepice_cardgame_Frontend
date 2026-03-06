@@ -30,8 +30,13 @@ export default function MyCollection() {
       params.set('page', String(page));
       if (query.trim()) params.set('q', query.trim());
       const response = await fetch(withApiBase(`/decks?${params.toString()}`));
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.message || 'Failed to load saved decks');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Saved deck API not deployed on backend yet. Redeploy backend latest commit.');
+        }
+        throw new Error(payload?.message || 'Failed to load saved decks');
+      }
       setDecks(Array.isArray(payload?.decks) ? payload.decks : []);
       setPagination(payload?.pagination || null);
     } catch (err) {
