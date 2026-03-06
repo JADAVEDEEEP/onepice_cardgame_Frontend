@@ -10,6 +10,7 @@ import { CardTile } from '../components/card-tile';
 import { Card as CardType } from '../data/mockData';
 import { useCards } from '../data/cardsApi';
 import { withApiBase } from '../data/apiBase';
+import { saveDeckHybrid } from '../data/savedDecksApi';
 import { Search, Filter, Save, Download, Sparkles, BarChart3, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -473,17 +474,12 @@ export default function DeckBuilder() {
         notes: '',
       };
 
-      const response = await fetch(withApiBase('/decks/save'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.message || 'Failed to save deck');
+      const result = await saveDeckHybrid(payload);
+      if (result.mode === 'api') {
+        setSaveStatus(`Saved: ${result.data?.deck_name || payload.deck_name}`);
+      } else {
+        setSaveStatus(`Saved locally: ${result.deck.deck_name}`);
       }
-
-      setSaveStatus(`Saved: ${data.deck_name}`);
     } catch (err) {
       setSaveStatus(err instanceof Error ? err.message : 'Failed to save deck');
     } finally {

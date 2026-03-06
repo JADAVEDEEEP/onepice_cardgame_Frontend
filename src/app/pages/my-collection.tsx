@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { withApiBase } from '../data/apiBase';
+import { listSavedDecksLocal } from '../data/savedDecksApi';
 import { Link } from 'react-router';
 
 type SavedDeck = {
@@ -33,16 +34,27 @@ export default function MyCollection() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error('Saved deck API not deployed on backend yet. Redeploy backend latest commit.');
+          const localPayload = listSavedDecksLocal({ page, limit: 12, q: query });
+          setDecks(localPayload.decks);
+          setPagination(localPayload.pagination);
+          setError('Using local saved decks (production /decks API not available).');
+          return;
         }
         throw new Error(payload?.message || 'Failed to load saved decks');
       }
       setDecks(Array.isArray(payload?.decks) ? payload.decks : []);
       setPagination(payload?.pagination || null);
     } catch (err) {
-      setDecks([]);
-      setPagination(null);
-      setError(err instanceof Error ? err.message : 'Failed to load saved decks');
+      const localPayload = listSavedDecksLocal({ page, limit: 12, q: query });
+      if (localPayload.decks.length > 0) {
+        setDecks(localPayload.decks);
+        setPagination(localPayload.pagination);
+        setError('Using local saved decks (network/API unavailable).');
+      } else {
+        setDecks([]);
+        setPagination(null);
+        setError(err instanceof Error ? err.message : 'Failed to load saved decks');
+      }
     } finally {
       setLoading(false);
     }
