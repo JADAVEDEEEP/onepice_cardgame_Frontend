@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { Target, TrendingUp, AlertTriangle } from 'lucide-react';
 import { withApiBase } from '../data/apiBase';
+import { Button } from '../components/ui/button';
 
 type MatrixCell = { row: string; col: string; value: number; sampleSize?: number };
 type MatrixDeck = {
@@ -15,6 +16,8 @@ type MatrixDeck = {
   win_rate_estimate: number;
   top8_rate: number;
   avg_placement: number;
+  is_custom?: boolean;
+  saved_deck_id?: string;
 };
 
 type MatrixResponse = {
@@ -22,17 +25,26 @@ type MatrixResponse = {
   cols: string[];
   cells: MatrixCell[];
   decks: MatrixDeck[];
+  pagination?: {
+    total_decks: number;
+    total_pages: number;
+    has_next: boolean;
+    has_prev: boolean;
+  };
 };
 
 export default function MatchupMatrix() {
   const [timeWindow, setTimeWindow] = useState('30');
   const [format, setFormat] = useState('all');
+  const [deckQuery, setDeckQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [savedDeckId] = useState(() => new URLSearchParams(window.location.search).get('savedDeck') || '');
   const [selectedMatchup, setSelectedMatchup] = useState<{ row: string; col: string } | null>(null);
   const [matrixData, setMatrixData] = useState<MatrixResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadMatrix = async (windowDays: string, selectedFormat: string) => {
+  const loadMatrix = async (windowDays: string, selectedFormat: string, savedId: string, currentPage: number, currentQuery: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -40,8 +52,11 @@ export default function MatchupMatrix() {
       dateFrom.setDate(dateFrom.getDate() - Number(windowDays || 30));
       const params = new URLSearchParams();
       params.set('limit', '8');
+      params.set('page', String(currentPage));
       if (selectedFormat !== 'all') params.set('format', selectedFormat);
       params.set('date_from', dateFrom.toISOString().slice(0, 10));
+      if (savedId) params.set('saved_deck_id', savedId);
+      if (currentQuery.trim()) params.set('deck_query', currentQuery.trim());
       const response = await fetch(withApiBase(`/analytics/matchup-matrix?${params.toString()}`));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.message || 'Failed to load matchup matrix');
@@ -55,8 +70,12 @@ export default function MatchupMatrix() {
   };
 
   useEffect(() => {
-    void loadMatrix(timeWindow, format);
-  }, [timeWindow, format]);
+    void loadMatrix(timeWindow, format, savedDeckId, page, deckQuery);
+  }, [timeWindow, format, savedDeckId, page, deckQuery]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [timeWindow, format, deckQuery]);
 
   const selectedCell = useMemo(() => {
     if (!selectedMatchup || !matrixData) return null;
@@ -123,8 +142,15 @@ export default function MatchupMatrix() {
         <div>
           <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Matchup Matrix</h1>
           <p className="text-[var(--text-secondary)]">Deck vs Deck matchup grid using live API data</p>
+          {savedDeckId && <p className="text-xs text-[var(--text-muted)] mt-1">Including your saved deck in matrix calculation.</p>}
         </div>
         <div className="flex items-center gap-2">
+          <input
+            value={deckQuery}
+            onChange={(e) => setDeckQuery(e.target.value)}
+            placeholder="Search deck..."
+            className="h-10 w-[180px] rounded-md border border-[var(--border-default)] bg-[var(--surface-1)] px-3 text-sm"
+          />
           <Select value={timeWindow} onValueChange={setTimeWindow}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
@@ -174,6 +200,30 @@ export default function MatchupMatrix() {
           cols={matrixData?.cols || []}
           onCellClick={(row, col) => setSelectedMatchup({ row, col })}
         />
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-xs text-[var(--text-muted)]">
+            Page {matrixData?.pagination?.total_pages ? Math.min(page, matrixData.pagination.total_pages) : page}
+            {matrixData?.pagination?.total_pages ? ` / ${matrixData.pagination.total_pages}` : ''}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!matrixData?.pagination?.has_prev || loading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Prev
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!matrixData?.pagination?.has_next || loading}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {selectedMatchup && (

@@ -23,6 +23,27 @@ type BestDeckResponse = {
   top_10_ranked_decks: RankedDeck[];
 };
 
+type SavedDeck = {
+  _id: string;
+  deck_name: string;
+};
+
+type SavedDeckListResponse = {
+  decks?: SavedDeck[];
+};
+
+type MatrixCell = {
+  row: string;
+  col: string;
+  value: number;
+};
+
+type MatrixResponse = {
+  rows: string[];
+  cols: string[];
+  cells: MatrixCell[];
+};
+
 type DeckDetailsResponse = {
   deck: string;
   summary: {
@@ -49,6 +70,25 @@ const colorCycle: OPTCGColor[] = ['red', 'blue', 'green', 'purple', 'black', 'ye
 
 const clamp = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));
 
+type DeckOption = {
+  key: string;
+  label: string;
+  source: 'meta' | 'saved';
+  deckName: string;
+  savedDeckId?: string;
+};
+
+// Saved deck labels se date tokens hata kar clean display name deta hai.
+const stripDateFromDeckName = (value: string) =>
+  String(value || '')
+    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, '')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+const formatWinRate = (value: number, isSavedDeck: boolean) =>
+  `${(isSavedDeck ? value / 10 : value).toFixed(1)}%`;
+
 const calculateMetrics = (summary: DeckDetailsResponse['summary']): CompareMetrics => {
   const winRate = clamp(summary.win_rate_estimate || 0);
   const top8 = clamp(summary.top8_rate || 0);
@@ -66,11 +106,13 @@ const calculateMetrics = (summary: DeckDetailsResponse['summary']): CompareMetri
 };
 
 export default function DeckCompare() {
-  const [deckOptions, setDeckOptions] = useState<RankedDeck[]>([]);
-  const [deckAName, setDeckAName] = useState('');
-  const [deckBName, setDeckBName] = useState('');
+  const [deckOptions, setDeckOptions] = useState<DeckOption[]>([]);
+  const [deckAKey, setDeckAKey] = useState('');
+  const [deckBKey, setDeckBKey] = useState('');
   const [deckA, setDeckA] = useState<DeckDetailsResponse | null>(null);
   const [deckB, setDeckB] = useState<DeckDetailsResponse | null>(null);
+  const [fieldComparison, setFieldComparison] = useState<{ opponent: string; winRate: number }[]>([]);
+  const [fieldLoading, setFieldLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,26 +123,57 @@ export default function DeckCompare() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(withApiBase('/meta/best-deck?limit=all'));
-        const payload: BestDeckResponse = await response.json();
-        if (!response.ok) {
-          throw new Error((payload as { message?: string })?.message || 'Failed to load deck options');
+        const [bestRes, savedRes] = await Promise.all([
+          fetch(withApiBase('/meta/best-deck?limit=all')),
+          fetch(withApiBase('/decks?limit=100')),
+        ]);
+        const bestPayload: BestDeckResponse = await bestRes.json();
+        const savedPayload: SavedDeckListResponse = await savedRes.json();
+        if (!bestRes.ok) {
+          throw new Error((bestPayload as { message?: string })?.message || 'Failed to load meta deck options');
         }
-        const options = Array.isArray(payload?.ranked_decks)
-          ? payload.ranked_decks
-          : Array.isArray(payload?.top_10_ranked_decks)
-          ? payload.top_10_ranked_decks
+        const ranked = Array.isArray(bestPayload?.ranked_decks)
+          ? bestPayload.ranked_decks
+          : Array.isArray(bestPayload?.top_10_ranked_decks)
+          ? bestPayload.top_10_ranked_decks
           : [];
+        const metaOptions: DeckOption[] = ranked.map((deck) => ({
+          key: `meta:${deck.deck}`,
+          label: deck.deck,
+          source: 'meta',
+          deckName: deck.deck,
+        }));
+        const savedDecks = savedRes.ok && Array.isArray(savedPayload?.decks) ? savedPayload.decks : [];
+        const savedOptions: DeckOption[] = savedDecks.map((deck) => ({
+          key: `saved:${deck._id}`,
+          label: `${stripDateFromDeckName(deck.deck_name)} (Saved)`,
+          source: 'saved',
+          deckName: stripDateFromDeckName(deck.deck_name),
+          savedDeckId: deck._id,
+        }));
+        const options = [...metaOptions, ...savedOptions];
         if (!mounted) return;
         setDeckOptions(options);
-        setDeckAName(options[0]?.deck || '');
-        setDeckBName(options[1]?.deck || options[0]?.deck || '');
+
+        const query = new URLSearchParams(window.location.search);
+        const savedA = query.get('savedA');
+        const savedB = query.get('savedB');
+        const requestedA = savedA ? `saved:${savedA}` : '';
+        const requestedB = savedB ? `saved:${savedB}` : '';
+        const validA = options.find((o) => o.key === requestedA)?.key || options[0]?.key || '';
+        const validB =
+          options.find((o) => o.key === requestedB)?.key ||
+          options.find((o) => o.key !== validA)?.key ||
+          validA;
+
+        setDeckAKey(validA);
+        setDeckBKey(validB);
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : 'Failed to load deck options');
           setDeckOptions([]);
-          setDeckAName('');
-          setDeckBName('');
+          setDeckAKey('');
+          setDeckBKey('');
         }
       } finally {
         if (mounted) setLoading(false);
@@ -116,42 +189,141 @@ export default function DeckCompare() {
   useEffect(() => {
     let mounted = true;
 
-    const loadDeckDetail = async (deckName: string, setFn: (value: DeckDetailsResponse | null) => void) => {
-      if (!deckName) {
+    const loadDeckDetail = async (optionKey: string, setFn: (value: DeckDetailsResponse | null) => void) => {
+      if (!optionKey) {
+        setFn(null);
+        return;
+      }
+      const selectedOption = deckOptions.find((option) => option.key === optionKey);
+      if (!selectedOption) {
         setFn(null);
         return;
       }
       try {
-        const response = await fetch(withApiBase(`/meta/deck/${encodeURIComponent(deckName)}`));
-        const payload: DeckDetailsResponse = await response.json();
-        if (!response.ok) {
-          throw new Error((payload as { message?: string })?.message || `Failed to load ${deckName}`);
+        if (selectedOption.source === 'saved' && selectedOption.savedDeckId) {
+          const response = await fetch(withApiBase(`/analytics/saved-deck-profile/${selectedOption.savedDeckId}`));
+          const payload = await response.json();
+          if (response.ok && payload?.summary) {
+            if (mounted) {
+              setFn({
+                deck: payload.deck || selectedOption.deckName,
+                summary: payload.summary,
+              });
+            }
+            return;
+          }
+
+          // Fallback: saved deck profile endpoint available na ho to matrix se custom deck stats lo.
+          const params = new URLSearchParams();
+          params.set('saved_deck_id', selectedOption.savedDeckId);
+          params.set('limit', '8');
+          const fallbackRes = await fetch(withApiBase(`/analytics/matchup-matrix?${params.toString()}`));
+          const fallbackPayload = await fallbackRes.json();
+          if (!fallbackRes.ok) throw new Error('Failed to load saved deck profile');
+
+          const customDeck = (fallbackPayload?.decks || []).find(
+            (d: { is_custom?: boolean; saved_deck_id?: string }) =>
+              d?.is_custom || d?.saved_deck_id === selectedOption.savedDeckId
+          );
+          if (!customDeck) throw new Error('Saved deck stats not found in matrix');
+
+          if (mounted) {
+            setFn({
+              deck: customDeck.deck || selectedOption.deckName,
+              summary: {
+                entries: customDeck.entries || 0,
+                wins: customDeck.wins || 0,
+                top8: customDeck.top8 || 0,
+                win_rate_estimate: customDeck.win_rate_estimate || 0,
+                top8_rate: customDeck.top8_rate || 0,
+                avg_placement: customDeck.avg_placement ?? null,
+                tournaments_covered: customDeck.entries || 0,
+              },
+            });
+          }
+          return;
         }
-        if (mounted) setFn(payload);
+
+        const response = await fetch(withApiBase(`/meta/deck/${encodeURIComponent(selectedOption.deckName)}`));
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error((payload as { message?: string })?.message || `Failed to load ${selectedOption.deckName}`);
+        }
+        if (mounted) {
+          setFn({
+            deck: payload.deck || selectedOption.deckName,
+            summary: payload.summary,
+          });
+        }
       } catch {
         if (mounted) setFn(null);
       }
     };
 
-    void loadDeckDetail(deckAName, setDeckA);
-    void loadDeckDetail(deckBName, setDeckB);
+    void loadDeckDetail(deckAKey, setDeckA);
+    void loadDeckDetail(deckBKey, setDeckB);
 
     return () => {
       mounted = false;
     };
-  }, [deckAName, deckBName]);
+  }, [deckAKey, deckBKey, deckOptions]);
 
   const selectedAIndex = Math.max(
     0,
-    deckOptions.findIndex((deck) => deck.deck === deckAName)
+    deckOptions.findIndex((deck) => deck.key === deckAKey)
   );
   const selectedBIndex = Math.max(
     0,
-    deckOptions.findIndex((deck) => deck.deck === deckBName)
+    deckOptions.findIndex((deck) => deck.key === deckBKey)
   );
 
+  const selectedOptionA = deckOptions.find((d) => d.key === deckAKey) || null;
+  const selectedOptionB = deckOptions.find((d) => d.key === deckBKey) || null;
   const metricsA = deckA ? calculateMetrics(deckA.summary) : null;
   const metricsB = deckB ? calculateMetrics(deckB.summary) : null;
+
+  useEffect(() => {
+    let mounted = true;
+    const savedOption = selectedOptionA?.source === 'saved' ? selectedOptionA : selectedOptionB?.source === 'saved' ? selectedOptionB : null;
+
+    const loadFieldComparison = async () => {
+      if (!savedOption?.savedDeckId) {
+        if (mounted) setFieldComparison([]);
+        return;
+      }
+      try {
+        setFieldLoading(true);
+        const params = new URLSearchParams();
+        params.set('saved_deck_id', savedOption.savedDeckId);
+        params.set('limit', '12');
+        const response = await fetch(withApiBase(`/analytics/matchup-matrix?${params.toString()}`));
+        const payload: MatrixResponse = await response.json();
+        if (!response.ok) throw new Error('Failed to load field comparison');
+
+        const savedDeckName = savedOption.deckName;
+        const rows = (payload.rows || []).filter((name) => name !== savedDeckName);
+        const values = rows
+          .map((opponent) => ({
+            opponent,
+            winRate:
+              payload.cells.find((c) => c.row === savedDeckName && c.col === opponent)?.value ??
+              50,
+          }))
+          .sort((a, b) => b.winRate - a.winRate);
+
+        if (mounted) setFieldComparison(values);
+      } catch {
+        if (mounted) setFieldComparison([]);
+      } finally {
+        if (mounted) setFieldLoading(false);
+      }
+    };
+
+    void loadFieldComparison();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedOptionA, selectedOptionB]);
 
   const radarData = useMemo(() => {
     if (!metricsA || !metricsB) return [];
@@ -169,7 +341,13 @@ export default function DeckCompare() {
     if (!metricsA || !metricsB) return [];
 
     const rows = [
-      { metric: 'Win Rate', deckA: `${metricsA.winRate.toFixed(1)}%`, deckB: `${metricsB.winRate.toFixed(1)}%`, valueA: metricsA.winRate, valueB: metricsB.winRate },
+      {
+        metric: 'Win Rate',
+        deckA: formatWinRate(metricsA.winRate, selectedOptionA?.source === 'saved'),
+        deckB: formatWinRate(metricsB.winRate, selectedOptionB?.source === 'saved'),
+        valueA: metricsA.winRate,
+        valueB: metricsB.winRate,
+      },
       { metric: 'Consistency', deckA: `${metricsA.consistency}/100`, deckB: `${metricsB.consistency}/100`, valueA: metricsA.consistency, valueB: metricsB.consistency },
       { metric: 'Tempo Score', deckA: `${(metricsA.tempo / 10).toFixed(1)}/10`, deckB: `${(metricsB.tempo / 10).toFixed(1)}/10`, valueA: metricsA.tempo, valueB: metricsB.tempo },
       { metric: 'Meta Fit', deckA: `${metricsA.metaFit}/100`, deckB: `${metricsB.metaFit}/100`, valueA: metricsA.metaFit, valueB: metricsB.metaFit },
@@ -180,7 +358,7 @@ export default function DeckCompare() {
       ...row,
       winner: row.valueA > row.valueB ? 'A' : row.valueB > row.valueA ? 'B' : 'tie',
     }));
-  }, [metricsA, metricsB]);
+  }, [metricsA, metricsB, selectedOptionA, selectedOptionB]);
 
   const aWins = statsComparison.filter((row) => row.winner === 'A').length;
   const bWins = statsComparison.filter((row) => row.winner === 'B').length;
@@ -188,19 +366,27 @@ export default function DeckCompare() {
   const recommendationA = useMemo(() => {
     if (!metricsA || !metricsB || !deckA) return [];
     const bullets: string[] = [];
-    if (metricsA.winRate > metricsB.winRate) bullets.push(`Higher estimated win rate (${metricsA.winRate.toFixed(1)}%) than ${deckB?.deck || 'Deck B'}.`);
+    if (metricsA.winRate > metricsB.winRate) {
+      bullets.push(
+        `Higher estimated win rate (${formatWinRate(metricsA.winRate, selectedOptionA?.source === 'saved')}) than ${deckB?.deck || 'Deck B'}.`
+      );
+    }
     if (metricsA.consistency > metricsB.consistency) bullets.push(`More stable consistency profile (${metricsA.consistency}/100).`);
     if (metricsA.metaFit > metricsB.metaFit) bullets.push(`Better current meta fit score (${metricsA.metaFit}/100).`);
     if (metricsA.tempo > metricsB.tempo) bullets.push(`Stronger tempo pressure for faster match pace.`);
     if (metricsA.resilience > metricsB.resilience) bullets.push(`Better resilience in long sets and grind games.`);
     if (bullets.length === 0) bullets.push(`${deckA.deck} is a balanced alternative if you prefer its play pattern.`);
     return bullets.slice(0, 4);
-  }, [metricsA, metricsB, deckA, deckB]);
+  }, [metricsA, metricsB, deckA, deckB, selectedOptionA]);
 
   const recommendationB = useMemo(() => {
     if (!metricsA || !metricsB || !deckB) return [];
     const bullets: string[] = [];
-    if (metricsB.winRate > metricsA.winRate) bullets.push(`Higher estimated win rate (${metricsB.winRate.toFixed(1)}%) than ${deckA?.deck || 'Deck A'}.`);
+    if (metricsB.winRate > metricsA.winRate) {
+      bullets.push(
+        `Higher estimated win rate (${formatWinRate(metricsB.winRate, selectedOptionB?.source === 'saved')}) than ${deckA?.deck || 'Deck A'}.`
+      );
+    }
     if (metricsB.consistency > metricsA.consistency) bullets.push(`More stable consistency profile (${metricsB.consistency}/100).`);
     if (metricsB.metaFit > metricsA.metaFit) bullets.push(`Better current meta fit score (${metricsB.metaFit}/100).`);
     if (metricsB.tempo > metricsA.tempo) bullets.push(`Stronger tempo pressure for proactive rounds.`);
@@ -208,7 +394,7 @@ export default function DeckCompare() {
     if (metricsB.skill > metricsA.skill) bullets.push(`Higher skill ceiling for advanced pilot optimization.`);
     if (bullets.length === 0) bullets.push(`${deckB.deck} is a balanced alternative if you prefer its matchup spread.`);
     return bullets.slice(0, 4);
-  }, [metricsA, metricsB, deckA, deckB]);
+  }, [metricsA, metricsB, deckA, deckB, selectedOptionB]);
 
   return (
     <div className="space-y-6">
@@ -223,14 +409,14 @@ export default function DeckCompare() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
           <p className="text-sm text-[var(--text-muted)] mb-2">Deck A</p>
-          <Select value={deckAName} onValueChange={setDeckAName}>
+          <Select value={deckAKey} onValueChange={setDeckAKey}>
             <SelectTrigger>
               <SelectValue placeholder="Select deck A" />
             </SelectTrigger>
             <SelectContent>
               {deckOptions.map((deck) => (
-                <SelectItem key={`a-${deck.deck}`} value={deck.deck}>
-                  {deck.deck}
+                <SelectItem key={`a-${deck.key}`} value={deck.key}>
+                  {deck.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -243,14 +429,14 @@ export default function DeckCompare() {
 
         <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
           <p className="text-sm text-[var(--text-muted)] mb-2">Deck B</p>
-          <Select value={deckBName} onValueChange={setDeckBName}>
+          <Select value={deckBKey} onValueChange={setDeckBKey}>
             <SelectTrigger>
               <SelectValue placeholder="Select deck B" />
             </SelectTrigger>
             <SelectContent>
               {deckOptions.map((deck) => (
-                <SelectItem key={`b-${deck.deck}`} value={deck.deck}>
-                  {deck.deck}
+                <SelectItem key={`b-${deck.key}`} value={deck.key}>
+                  {deck.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -322,6 +508,28 @@ export default function DeckCompare() {
           </div>
         </div>
       </Card>
+
+      {(selectedOptionA?.source === 'saved' || selectedOptionB?.source === 'saved') && (
+        <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
+          <h3 className="font-semibold text-[var(--text-primary)] mb-4">Saved Deck vs Existing Meta Decks</h3>
+          {fieldLoading ? (
+            <p className="text-sm text-[var(--text-muted)]">Loading full field comparison...</p>
+          ) : fieldComparison.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No comparison data available.</p>
+          ) : (
+            <div className="space-y-2">
+              {fieldComparison.map((row) => (
+                <div key={row.opponent} className="flex items-center justify-between p-2 rounded bg-[var(--surface-2)]">
+                  <span className="text-sm text-[var(--text-secondary)]">{row.opponent}</span>
+                  <span className={`text-sm font-semibold ${row.winRate >= 50 ? 'text-[var(--state-success)]' : 'text-[var(--state-destructive)]'}`}>
+                    {row.winRate}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

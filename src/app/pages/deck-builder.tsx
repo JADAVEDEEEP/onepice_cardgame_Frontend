@@ -100,6 +100,8 @@ export default function DeckBuilder() {
   const [optimizeStatus, setOptimizeStatus] = useState<string | null>(null);
   const [lastOptimizedAt, setLastOptimizedAt] = useState<string | null>(null);
   const [lastSimulatedAt, setLastSimulatedAt] = useState<string | null>(null);
+  const [savingDeck, setSavingDeck] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const { cards, loading, error } = useCards();
 
   const filteredCards = cards.filter(card => {
@@ -445,6 +447,50 @@ export default function DeckBuilder() {
     setLastSimulatedAt(new Date().toLocaleTimeString());
   };
 
+  const saveDeckToApi = async () => {
+    if (totalCards === 0) {
+      setSaveStatus('Add cards first, then save deck.');
+      return;
+    }
+    if (!selectedLeader) {
+      setSaveStatus('Select leader before saving deck.');
+      return;
+    }
+
+    try {
+      setSavingDeck(true);
+      setSaveStatus('Saving deck...');
+
+      const payload = {
+        deck_name: `${selectedLeader.name} Deck ${new Date().toLocaleDateString()}`,
+        leader: {
+          card_code: selectedLeader.card_code,
+          name: selectedLeader.name,
+          color: selectedLeader.color,
+        },
+        deck_cards: Array.from(deckCards.entries()).map(([card_code, count]) => ({ card_code, count })),
+        tags: [selectedLeader.color, totalCards >= 50 ? 'competitive' : 'draft'],
+        notes: '',
+      };
+
+      const response = await fetch(withApiBase('/decks/save'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || 'Failed to save deck');
+      }
+
+      setSaveStatus(`Saved: ${data.deck_name}`);
+    } catch (err) {
+      setSaveStatus(err instanceof Error ? err.message : 'Failed to save deck');
+    } finally {
+      setSavingDeck(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -458,12 +504,13 @@ export default function DeckBuilder() {
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
-          <Button>
+          <Button onClick={() => void saveDeckToApi()} disabled={savingDeck}>
             <Save className="w-4 h-4 mr-2" />
-            Save Deck
+            {savingDeck ? 'Saving...' : 'Save Deck'}
           </Button>
         </div>
       </div>
+      {saveStatus && <p className="text-xs text-[var(--text-muted)]">{saveStatus}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Filters & Search */}
