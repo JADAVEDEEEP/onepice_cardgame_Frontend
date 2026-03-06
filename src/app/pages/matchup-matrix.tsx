@@ -60,6 +60,7 @@ export default function MatchupMatrix() {
       const response = await fetch(withApiBase(`/analytics/matchup-matrix?${params.toString()}`));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.message || 'Failed to load matchup matrix');
+
       setMatrixData(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load matchup matrix');
