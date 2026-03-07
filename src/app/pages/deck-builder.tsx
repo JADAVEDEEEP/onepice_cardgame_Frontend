@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -102,6 +102,8 @@ export default function DeckBuilder() {
   const [lastSimulatedAt, setLastSimulatedAt] = useState<string | null>(null);
   const [savingDeck, setSavingDeck] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement | null>(null);
   const { cards, loading, error } = useCards();
 
   const filteredCards = cards.filter(card => {
@@ -439,6 +441,137 @@ export default function DeckBuilder() {
     }
   };
 
+  const parseDeckTextLines = (text: string): Array<{ card_code: string; count: number }> => {
+    const lines = String(text || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const items: Array<{ card_code: string; count: number }> = [];
+    for (const line of lines) {
+      // Primary expected format: "<count>x<card_id>" e.g. "3xOP12-034"
+      const strict = line.match(/^(\d+)\s*x\s*([A-Za-z]{1,5}\d{2}-\d{3}(?:[_-][A-Za-z0-9]+)?)$/i);
+      if (strict) {
+        const count = Math.max(1, Math.min(4, Number(strict[1] || 1)));
+        const cardCode = String(strict[2] || '').toUpperCase();
+        if (cardCode) items.push({ card_code: cardCode, count });
+        continue;
+      }
+
+      // Secondary fallback parser for loose text lines.
+      const codeMatch = line.match(/[A-Z]{1,5}\d{2}-\d{3}(?:[_-][A-Za-z0-9]+)?/i);
+      if (!codeMatch) continue;
+      const cardCode = codeMatch[0].toUpperCase();
+      const countMatch = line.match(/^(\d+)\s*x\s*/i) || line.match(/^(\d+)\s+/) || line.match(/\bx\s*(\d+)\b/i);
+      const count = Math.max(1, Math.min(4, Number(countMatch?.[1] || 1)));
+      items.push({ card_code: cardCode, count });
+    }
+    return items;
+  };
+
+  const normalizeDeckItemsFromAny = (payload: any): Array<{ card_code: string; count: number }> => {
+    const source = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.deck_cards)
+        ? payload.deck_cards
+        : Array.isArray(payload?.decklist)
+          ? payload.decklist
+          : Array.isArray(payload?.deckCards)
+            ? payload.deckCards
+            : [];
+    return source
+      .map((item: any) => ({
+        card_code: String(item?.card_code || item?.code || item?.id || '').trim().toUpperCase(),
+        count: Math.max(1, Math.min(4, Number(item?.count || item?.qty || item?.quantity || item?.copies || 1))),
+      }))
+      .filter((item: { card_code: string; count: number }) => item.card_code);
+  };
+
+  const applyImportedDeck = (rawText: string) => {
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = null;
+    }
+
+    const importedItems = parsed ? normalizeDeckItemsFromAny(parsed) : parseDeckTextLines(rawText);
+    if (importedItems.length === 0) {
+      setImportStatus('No valid deck cards found in selected file.');
+      return;
+    }
+
+    const leaderCode = String(parsed?.leader?.card_code || parsed?.leader_code || parsed?.leaderCode || '').trim().toUpperCase();
+    const leaderName = String(parsed?.leader?.name || parsed?.leader_name || '').trim().toLowerCase();
+
+    let importedLeader: CardType | null = null;
+    if (leaderCode) {
+      const byCode = cardByCode.get(leaderCode);
+      if (byCode?.type === 'leader') importedLeader = byCode;
+    }
+    if (!importedLeader && leaderName) {
+      importedLeader = cards.find((card) => card.type === 'leader' && card.name.toLowerCase() === leaderName) || null;
+    }
+
+    const normalizeCode = (value: string) => String(value || '').trim().toUpperCase().replace(/[-_](P|R)\d+$/i, '');
+    const cardByNormalizedCode = new Map<string, CardType>();
+    for (const card of cards) {
+      const exact = String(card.card_code || '').toUpperCase();
+      const normalized = normalizeCode(exact);
+      if (exact && !cardByNormalizedCode.has(exact)) cardByNormalizedCode.set(exact, card);
+      if (normalized && !cardByNormalizedCode.has(normalized)) cardByNormalizedCode.set(normalized, card);
+    }
+    const resolveImportedCard = (code: string) => {
+      const exact = String(code || '').toUpperCase();
+      const normalized = normalizeCode(exact);
+      return cardByCode.get(exact) || cardByNormalizedCode.get(exact) || cardByNormalizedCode.get(normalized) || null;
+    };
+
+    const nextDeck = new Map<string, number>();
+    let total = 0;
+    let accepted = 0;
+    let unresolved = 0;
+    for (const item of importedItems) {
+      const card = resolveImportedCard(item.card_code);
+      if (!card || card.type === 'leader') {
+        unresolved += 1;
+        continue;
+      }
+      const existing = nextDeck.get(card.card_code) || 0;
+      const allowed = Math.min(4 - existing, 50 - total, item.count);
+      if (allowed <= 0) continue;
+      nextDeck.set(card.card_code, existing + allowed);
+      total += allowed;
+      accepted += allowed;
+      if (total >= 50) break;
+    }
+
+    if (nextDeck.size === 0) {
+      setImportStatus('No matching card codes found in current card pool.');
+      return;
+    }
+
+    setDeckCards(nextDeck);
+    if (importedLeader) setSelectedLeader(importedLeader);
+    setOptimizeAnalysis(null);
+    setOptimizeSuggestions([]);
+    setMatchupResults([]);
+    setDeckPowerReport(null);
+    setOptimizeStatus(null);
+    setImportStatus(`Deck imported: ${accepted} cards${importedLeader ? ` + leader ${importedLeader.name}` : ''}${unresolved > 0 ? ` (${unresolved} lines not matched)` : ''}.`);
+  };
+
+  const onImportDeckFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      applyImportedDeck(text);
+    } catch {
+      setImportStatus('Failed to read deck file.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -448,9 +581,16 @@ export default function DeckBuilder() {
           <p className="text-[var(--text-secondary)]">Build and optimize your competitive deck with live cards data.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline">
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".json,.txt,.deck"
+            className="hidden"
+            onChange={(e) => void onImportDeckFile(e)}
+          />
+          <Button variant="outline" onClick={() => importFileRef.current?.click()}>
             <Download className="w-4 h-4 mr-2" />
-            Export
+            Import Deck File
           </Button>
           <Button onClick={() => void saveDeckToApi()} disabled={savingDeck}>
             <Save className="w-4 h-4 mr-2" />
@@ -459,6 +599,7 @@ export default function DeckBuilder() {
         </div>
       </div>
       {saveStatus && <p className="text-xs text-[var(--text-muted)]">{saveStatus}</p>}
+      {importStatus && <p className="text-xs text-[var(--text-muted)]">{importStatus}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Filters & Search */}
@@ -559,7 +700,7 @@ export default function DeckBuilder() {
         </div>
 
         {/* Middle: Card Grid */}
-        <div className="lg:col-span-6">
+        <div className="lg:col-span-9">
           <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-[var(--text-primary)]">Available Cards</h3>
@@ -594,7 +735,7 @@ export default function DeckBuilder() {
               </p>
             )}
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[800px] overflow-y-auto pr-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[72vh] overflow-y-auto pr-2">
               {visibleCards.map((card) => (
                 <CardTile
                   key={card.card_code}
@@ -624,7 +765,7 @@ export default function DeckBuilder() {
         </div>
 
         {/* Right: Deck Panel */}
-        <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-4 lg:self-start">
+        <div className="lg:col-span-12 space-y-4">
           <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-[var(--text-primary)]">Your Deck</h3>
@@ -792,7 +933,7 @@ export default function DeckBuilder() {
                   {optimizeAnalysis && (
                     <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-3">
                       <p className="text-xs font-semibold text-[var(--text-primary)]">API Deck Analysis</p>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                         <div className="rounded border border-[var(--border-default)] p-2 text-center">
                           <p className="text-[10px] text-[var(--text-muted)]">Synergy</p>
                           <p className="font-semibold">{optimizeAnalysis.synergyScore?.score ?? 0}/100</p>
@@ -809,7 +950,7 @@ export default function DeckBuilder() {
 
                       <div className="rounded border border-[var(--border-default)] p-2">
                         <p className="text-xs font-medium mb-1">Cost Curve (API)</p>
-                        <div className="grid grid-cols-3 gap-2 text-[11px]">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
                           <div className="flex justify-between"><span>Early</span><span>{optimizeAnalysis.costCurve?.phases?.earlyGame?.percent ?? 0}%</span></div>
                           <div className="flex justify-between"><span>Mid</span><span>{optimizeAnalysis.costCurve?.phases?.midGame?.percent ?? 0}%</span></div>
                           <div className="flex justify-between"><span>Late</span><span>{optimizeAnalysis.costCurve?.phases?.lateGame?.percent ?? 0}%</span></div>
@@ -823,7 +964,7 @@ export default function DeckBuilder() {
 
                       <div className="rounded border border-[var(--border-default)] p-2">
                         <p className="text-xs font-medium mb-1">Role Breakdown (API)</p>
-                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                           <div className="flex justify-between"><span>Character</span><span>{optimizeAnalysis.roleBreakdown?.typeCounts?.characters ?? 0}</span></div>
                           <div className="flex justify-between"><span>Event</span><span>{optimizeAnalysis.roleBreakdown?.typeCounts?.events ?? 0}</span></div>
                           <div className="flex justify-between"><span>Stage</span><span>{optimizeAnalysis.roleBreakdown?.typeCounts?.stages ?? 0}</span></div>
@@ -849,7 +990,7 @@ export default function DeckBuilder() {
                           <p className="text-xs font-medium mb-1">
                             Target Plan ({optimizeAnalysis.targetPlan.archetype})
                           </p>
-                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                             {Object.entries(optimizeAnalysis.targetPlan.targets).map(([key, value]) => (
                               <div key={key} className="flex justify-between">
                                 <span>{key.replace(/_/g, ' ')}</span>
