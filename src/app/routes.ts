@@ -61,6 +61,10 @@ export const router = createBrowserRouter([
         Component: CardExplorer
       },
       {
+        path: 'events',
+        Component: MetaTrends
+      },
+      {
         path: 'meta-trends',
         Component: MetaTrends
       },

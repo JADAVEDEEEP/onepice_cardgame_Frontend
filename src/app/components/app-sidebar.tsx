@@ -25,7 +25,7 @@ const navigation = [
   { name: 'Deck Compare', href: '/deck-compare', icon: GitCompare },
   { name: 'Matchup Matrix', href: '/matchup-matrix', icon: Grid3x3 },
   { name: 'Card Explorer', href: '/card-explorer', icon: Search },
-  { name: 'Meta Trends', href: '/meta-trends', icon: TrendingUp },
+  { name: 'Events', href: '/events', icon: TrendingUp },
   { name: 'My Collection', href: '/my-collection', icon: BookMarked },
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Settings', href: '/settings', icon: Settings }
