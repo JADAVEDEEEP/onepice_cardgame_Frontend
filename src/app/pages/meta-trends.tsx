@@ -34,6 +34,7 @@ const extractDisplayDate = (event: WatchedEvent) => {
 export default function MetaTrends() {
   const [status, setStatus] = useState<WatcherStatus | null>(null);
   const [events, setEvents] = useState<WatchedEvent[]>([]);
+  const [visibleCount, setVisibleCount] = useState(30);
   const [loading, setLoading] = useState(false);
   const [runningNow, setRunningNow] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -43,11 +44,11 @@ export default function MetaTrends() {
       setLoading(true);
       const [statusRes, recentResPrimary] = await Promise.all([
         fetch(withApiBase('/watcher/status')),
-        fetch(withApiBase('/watcher/recent')),
+        fetch(withApiBase('/watcher/recent?limit=all')),
       ]);
       const recentRes =
         recentResPrimary.status === 404
-          ? await fetch(withApiBase('/watcher.js/recent'))
+          ? await fetch(withApiBase('/watcher.js/recent?limit=all'))
           : recentResPrimary;
       const [statusJson, recentJson] = await Promise.all([
         statusRes.json().catch(() => ({})),
@@ -57,6 +58,7 @@ export default function MetaTrends() {
       if (!recentRes.ok) throw new Error(recentJson?.message || 'Failed to load watcher events');
       setStatus(statusJson as WatcherStatus);
       setEvents(Array.isArray(recentJson?.events) ? (recentJson.events as WatchedEvent[]) : []);
+      setVisibleCount(30);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to load events');
     } finally {
@@ -120,7 +122,7 @@ export default function MetaTrends() {
           <p className="text-[var(--text-muted)]">No events detected yet.</p>
         ) : (
           <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
-            {events.map((event) => (
+            {events.slice(0, visibleCount).map((event) => (
               <div key={event.url} className="rounded-lg border border-[var(--border-default)] p-3 bg-[var(--surface-2)]">
                 <p className="font-medium text-[var(--text-primary)]">{event.title || event.url}</p>
                 <p className="text-xs text-[var(--text-muted)] mt-1">
@@ -137,6 +139,13 @@ export default function MetaTrends() {
                 </a>
               </div>
             ))}
+            {visibleCount < events.length && (
+              <div className="pt-1">
+                <Button variant="outline" onClick={() => setVisibleCount((prev) => prev + 30)}>
+                  Load More
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>
