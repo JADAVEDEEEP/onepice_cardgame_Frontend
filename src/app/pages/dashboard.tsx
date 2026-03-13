@@ -280,7 +280,7 @@ export default function Dashboard() {
             </Link>
           </div>
           {metaError && <p className="text-sm text-[var(--state-destructive)] mb-3">Meta API error: {metaError}</p>}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {rankedDecks.map((deck, index) => (
               <Card key={deck.deck} className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--border-soft)] transition-all cursor-pointer">
                 <div className="flex items-start justify-between mb-3">

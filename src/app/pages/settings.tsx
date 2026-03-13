@@ -172,11 +172,6 @@ export default function Settings() {
           )}
           {watcherMessage && <p className="text-[var(--text-muted)]">{watcherMessage}</p>}
         </div>
-        <div className="mt-4">
-          <Button onClick={() => void runWatcherNow()} disabled={watcherActionLoading}>
-            {watcherActionLoading ? 'Running...' : 'Run Watcher Now'}
-          </Button>
-        </div>
       </Card>
 
       <Card className="p-4 sm:p-6 bg-[var(--surface-1)] border-[var(--border-default)]">

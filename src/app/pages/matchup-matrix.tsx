@@ -146,32 +146,33 @@ export default function MatchupMatrix() {
           {savedDeckId && <p className="text-xs text-[var(--text-muted)] mt-1">Including your saved deck in matrix calculation.</p>}
         </div>
         <div className="flex items-center gap-2">
-          <input
-            value={deckQuery}
-            onChange={(e) => setDeckQuery(e.target.value)}
-            placeholder="Search deck..."
-            className="h-10 w-[180px] rounded-md border border-[var(--border-default)] bg-[var(--surface-1)] px-3 text-sm"
-          />
-          <Select value={timeWindow} onValueChange={setTimeWindow}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={format} onValueChange={setFormat}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Formats</SelectItem>
-              <SelectItem value="OP13">OP13</SelectItem>
-              <SelectItem value="OP14">OP14</SelectItem>
-            </SelectContent>
-          </Select>
+  <input
+    value={deckQuery}
+    onChange={(e) => setDeckQuery(e.target.value)}
+    placeholder="Search deck..."
+    className="h-10 w-[180px] rounded-md border border-[var(--border-default)] bg-[var(--surface-1)] px-3 text-sm text-white placeholder-gray-400"
+  />
+        <Select value={timeWindow} onValueChange={setTimeWindow}>
+  <SelectTrigger className="w-[140px] text-white bg-[var(--surface-1)] border border-[var(--border-default)]">
+    <SelectValue />
+  </SelectTrigger>
+  <SelectContent className="bg-[var(--surface-1)] text-white border border-[var(--border-default)]">
+    <SelectItem value="7">Last 7 days</SelectItem>
+    <SelectItem value="30">Last 30 days</SelectItem>
+    <SelectItem value="90">Last 90 days</SelectItem>
+  </SelectContent>
+</Select>
+
+<Select value={format} onValueChange={setFormat}>
+  <SelectTrigger className="w-[140px] text-white bg-[var(--surface-1)] border border-[var(--border-default)]">
+    <SelectValue />
+  </SelectTrigger>
+  <SelectContent className="bg-[var(--surface-1)] text-white border border-[var(--border-default)]">
+    <SelectItem value="all">All Formats</SelectItem>
+    <SelectItem value="OP13">OP13</SelectItem>
+    <SelectItem value="OP14">OP14</SelectItem>
+  </SelectContent>
+</Select>
         </div>
       </div>
 
