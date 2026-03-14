@@ -266,97 +266,97 @@ export default function Dashboard() {
             </ReBarChart>
           </ResponsiveContainer>
           <div className="mt-3 pt-3 border-t border-[var(--border-soft)]">
-            <p className="text-[10px] text-[var(--text-muted)] font-mono">Data: /meta/best-deck {'->'} top_10_ranked_decks.top8_rate</p>
+            <p className="text-[10px] text-[var(--text-muted)] font-mono">Data: /meta/best-deck {'>'} top_10_ranked_decks.top8_rate</p>
           </div>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-[var(--text-primary)]">Top 10 Ranked Decks</h3>
-            <Link to="/deck-builder">
-              <Button variant="ghost" size="sm">View All</Button>
-            </Link>
-          </div>
-          {metaError && <p className="text-sm text-[var(--state-destructive)] mb-3">Meta API error: {metaError}</p>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rankedDecks.map((deck, index) => (
-              <Card key={deck.deck} className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--border-soft)] transition-all cursor-pointer">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-[var(--text-primary)] mb-1">#{index + 1} {deck.deck}</h4>
-                    <p className="text-xs font-mono text-[var(--text-muted)]">Entries: {deck.entries}</p>
-                  </div>
-                  <ColorBadge color={chartColors[index % chartColors.length]} size="sm" />
-                </div>
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-[var(--text-secondary)]">Est Win Rate</span>
-                    <span className="font-medium text-[var(--state-success)]">{deck.win_rate_estimate.toFixed(1)}%</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-[var(--text-secondary)]">Top8 Rate</span>
-                    <span className="font-medium">{deck.top8_rate.toFixed(1)}%</span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Link to={`/deck-analytics/${encodeURIComponent(deck.deck)}`} className="flex-1">
-                    <Button size="sm" variant="outline" className="w-full">View</Button>
-                  </Link>
-                  <Button size="sm" className="flex-1">Clone</Button>
-                </div>
-              </Card>
-            ))}
-            {!metaLoading && rankedDecks.length === 0 && (
-              <p className="text-sm text-[var(--text-muted)]">No ranked decks found.</p>
-            )}
-          </div>
+      {/* Top 10 Ranked Decks - full width */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-[var(--text-primary)]">Top 10 Ranked Decks</h3>
+          <Link to="/deck-builder">
+            <Button variant="ghost" size="sm">View All</Button>
+          </Link>
         </div>
+        {metaError && <p className="text-sm text-[var(--state-destructive)] mb-3">Meta API error: {metaError}</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {rankedDecks.map((deck, index) => (
+            <Card key={deck.deck} className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--border-soft)] transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <h4 className="font-medium text-[var(--text-primary)] mb-1">#{index + 1} {deck.deck}</h4>
+                  <p className="text-xs font-mono text-[var(--text-muted)]">Entries: {deck.entries}</p>
+                </div>
+                <ColorBadge color={chartColors[index % chartColors.length]} size="sm" />
+              </div>
+              <div className="space-y-2 mb-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-secondary)]">Est Win Rate</span>
+                  <span className="font-medium text-[var(--state-success)]">{deck.win_rate_estimate.toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-secondary)]">Top8 Rate</span>
+                  <span className="font-medium">{deck.top8_rate.toFixed(1)}%</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Link to={`/deck-analytics/${encodeURIComponent(deck.deck)}`} className="flex-1">
+                  <Button size="sm" variant="outline" className="w-full">View</Button>
+                </Link>
+                <Button size="sm" className="flex-1">Clone</Button>
+              </div>
+            </Card>
+          ))}
+          {!metaLoading && rankedDecks.length === 0 && (
+            <p className="text-sm text-[var(--text-muted)]">No ranked decks found.</p>
+          )}
+        </div>
+      </div>
 
-        <div>
-          <h3 className="font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h3>
-          <div className="space-y-3">
-            <Link to="/deck-builder">
-              <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--accent-blue)] transition-all cursor-pointer">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[var(--accent-blue)]/10 rounded-lg">
-                    <Target className="w-5 h-5 text-[var(--accent-blue)]" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-[var(--text-primary)]">Build New Deck</p>
-                    <p className="text-xs text-[var(--text-muted)]">Start from scratch</p>
-                  </div>
+      {/* Quick Actions - full width below ranked decks */}
+      <div>
+        <h3 className="font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Link to="/deck-builder">
+            <Card className="p-5 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--accent-blue)] transition-all cursor-pointer">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[var(--accent-blue)]/10 rounded-lg">
+                  <Target className="w-6 h-6 text-[var(--accent-blue)]" />
                 </div>
-              </Card>
-            </Link>
-            <Link to="/color-finder">
-              <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--accent-green)] transition-all cursor-pointer">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[var(--accent-green)]/10 rounded-lg">
-                    <Star className="w-5 h-5 text-[var(--accent-green)]" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-[var(--text-primary)]">Best Color Finder</p>
-                    <p className="text-xs text-[var(--text-muted)]">Find your best color</p>
-                  </div>
+                <div>
+                  <p className="font-medium text-[var(--text-primary)]">Build New Deck</p>
+                  <p className="text-xs text-[var(--text-muted)]">Start from scratch</p>
                 </div>
-              </Card>
-            </Link>
-            <Link to="/deck-compare">
-              <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--accent-purple)] transition-all cursor-pointer">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[var(--accent-purple)]/10 rounded-lg">
-                    <BarChart className="w-5 h-5 text-[var(--accent-purple)]" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-[var(--text-primary)]">Compare Decks</p>
-                    <p className="text-xs text-[var(--text-muted)]">Side by side analysis</p>
-                  </div>
+              </div>
+            </Card>
+          </Link>
+          <Link to="/color-finder">
+            <Card className="p-5 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--accent-green)] transition-all cursor-pointer">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[var(--accent-green)]/10 rounded-lg">
+                  <Star className="w-6 h-6 text-[var(--accent-green)]" />
                 </div>
-              </Card>
-            </Link>
-          </div>
+                <div>
+                  <p className="font-medium text-[var(--text-primary)]">Best Color Finder</p>
+                  <p className="text-xs text-[var(--text-muted)]">Find your best color</p>
+                </div>
+              </div>
+            </Card>
+          </Link>
+          <Link to="/deck-compare">
+            <Card className="p-5 bg-[var(--surface-1)] border-[var(--border-default)] hover:border-[var(--accent-purple)] transition-all cursor-pointer">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[var(--accent-purple)]/10 rounded-lg">
+                  <BarChart className="w-6 h-6 text-[var(--accent-purple)]" />
+                </div>
+                <div>
+                  <p className="font-medium text-[var(--text-primary)]">Compare Decks</p>
+                  <p className="text-xs text-[var(--text-muted)]">Side by side analysis</p>
+                </div>
+              </div>
+            </Card>
+          </Link>
         </div>
       </div>
 

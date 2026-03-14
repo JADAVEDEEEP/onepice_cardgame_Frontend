@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { HeatmapGrid } from '../components/heatmap';
 import { useEffect, useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
-import { Target, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Target, TrendingUp, AlertTriangle, Search } from 'lucide-react';
 import { withApiBase } from '../data/apiBase';
 import { Button } from '../components/ui/button';
 
@@ -60,7 +60,6 @@ export default function MatchupMatrix() {
       const response = await fetch(withApiBase(`/analytics/matchup-matrix?${params.toString()}`));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.message || 'Failed to load matchup matrix');
-
       setMatrixData(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load matchup matrix');
@@ -126,76 +125,150 @@ export default function MatchupMatrix() {
     const list = [];
     if (matrixWinRate >= 55) list.push('Mulligan me proactive starts prioritize karo taaki opening pressure lose na ho.');
     else list.push('Mulligan me defensive + stable hand rakho aur high-risk starts avoid karo.');
-
     if (top8Delta >= 0) list.push(`Mid game me ${selectedDeckA.deck} ka proven line follow karo: low-variance sequencing pe focus rakho.`);
     else list.push(`Mid game me ${selectedDeckB.deck} ke power spike turns ko respect karo aur resources conserve karo.`);
-
     if (avgPlacementDelta >= 0) list.push('Closing turns me tempo convert karke game jaldi finish karo, extra grind avoid karo.');
     else list.push('Game ko long kheechne se pehle value parity ensure karo, warna late swing ka risk badhega.');
-
     list.push(`Confidence ${confidence} hai, isliye ${confidence === 'low' ? 'matchup ko testing ke saath pilot karo.' : 'current line ko tournament prep me use kar sakte ho.'}`);
     return list;
   }, [selectedDeckA, selectedDeckB, matrixWinRate, top8Delta, avgPlacementDelta, confidence]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Matchup Matrix</h1>
-          <p className="text-[var(--text-secondary)]">Deck vs Deck matchup grid using live API data</p>
-          {savedDeckId && <p className="text-xs text-[var(--text-muted)] mt-1">Including your saved deck in matrix calculation.</p>}
-        </div>
-        <div className="flex items-center gap-2">
-  <input
-    value={deckQuery}
-    onChange={(e) => setDeckQuery(e.target.value)}
-    placeholder="Search deck..."
-    className="h-10 w-[180px] rounded-md border border-[var(--border-default)] bg-[var(--surface-1)] px-3 text-sm text-white placeholder-gray-400"
-  />
-        <Select value={timeWindow} onValueChange={setTimeWindow}>
-  <SelectTrigger className="w-[140px] text-white bg-[var(--surface-1)] border border-[var(--border-default)]">
-    <SelectValue />
-  </SelectTrigger>
-  <SelectContent className="bg-[var(--surface-1)] text-white border border-[var(--border-default)]">
-    <SelectItem value="7">Last 7 days</SelectItem>
-    <SelectItem value="30">Last 30 days</SelectItem>
-    <SelectItem value="90">Last 90 days</SelectItem>
-  </SelectContent>
-</Select>
 
-<Select value={format} onValueChange={setFormat}>
-  <SelectTrigger className="w-[140px] text-white bg-[var(--surface-1)] border border-[var(--border-default)]">
-    <SelectValue />
-  </SelectTrigger>
-  <SelectContent className="bg-[var(--surface-1)] text-white border border-[var(--border-default)]">
-    <SelectItem value="all">All Formats</SelectItem>
-    <SelectItem value="OP13">OP13</SelectItem>
-    <SelectItem value="OP14">OP14</SelectItem>
-  </SelectContent>
-</Select>
+      {/* Header + Filters */}
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-1">Matchup Matrix</h1>
+          <p className="text-sm text-[var(--text-secondary)]">Deck vs Deck matchup grid using live API data</p>
+          {savedDeckId && (
+            <p className="text-xs text-[var(--text-muted)] mt-1">Including your saved deck in matrix calculation.</p>
+          )}
+        </div>
+
+        {/* Filter controls */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Search input */}
+          <div className="relative">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none"
+              style={{ width: 14, height: 14 }}
+            />
+            <input
+              value={deckQuery}
+              onChange={(e) => setDeckQuery(e.target.value)}
+              placeholder="Search deck..."
+              style={{
+                height: 36,
+                width: 180,
+                paddingLeft: 34,
+                paddingRight: 12,
+                borderRadius: 8,
+                border: '1px solid var(--border-default)',
+                background: 'var(--surface-2)',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+              }}
+              onFocus={(e) => (e.target.style.borderColor = 'var(--accent-blue)')}
+              onBlur={(e) => (e.target.style.borderColor = 'var(--border-default)')}
+            />
+          </div>
+
+          {/* Time window select */}
+          <Select value={timeWindow} onValueChange={setTimeWindow}>
+            <SelectTrigger
+              style={{
+                width: 140,
+                height: 36,
+                borderRadius: 8,
+                border: '1px solid var(--border-default)',
+                background: 'var(--surface-2)',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                paddingLeft: 12,
+                paddingRight: 8,
+              }}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent
+              style={{
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 8,
+                color: 'var(--text-primary)',
+                fontSize: 13,
+              }}
+            >
+              <SelectItem value="7">Last 7 days</SelectItem>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="90">Last 90 days</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Format select */}
+          <Select value={format} onValueChange={setFormat}>
+            <SelectTrigger
+              style={{
+                width: 140,
+                height: 36,
+                borderRadius: 8,
+                border: '1px solid var(--border-default)',
+                background: 'var(--surface-2)',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                paddingLeft: 12,
+                paddingRight: 8,
+              }}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent
+              style={{
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 8,
+                color: 'var(--text-primary)',
+                fontSize: 13,
+              }}
+            >
+              <SelectItem value="all">All Formats</SelectItem>
+              <SelectItem value="OP13">OP13</SelectItem>
+              <SelectItem value="OP14">OP14</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {loading && <p className="text-sm text-[var(--text-muted)]">Loading matchup matrix...</p>}
       {error && <p className="text-sm text-[var(--state-destructive)]">{error}</p>}
 
+      {/* Legend */}
       <Card className="p-4 bg-[var(--surface-1)] border-[var(--border-default)]">
         <div className="flex items-center gap-6 flex-wrap">
-          <span className="text-sm text-[var(--text-secondary)]">Win Rate:</span>
-          <div className="flex items-center gap-2"><div className="w-6 h-6 rounded bg-green-500/80" /><span className="text-xs">65%+</span></div>
-          <div className="flex items-center gap-2"><div className="w-6 h-6 rounded bg-green-500/50" /><span className="text-xs">55-64%</span></div>
-          <div className="flex items-center gap-2"><div className="w-6 h-6 rounded bg-gray-500/30" /><span className="text-xs">45-54%</span></div>
-          <div className="flex items-center gap-2"><div className="w-6 h-6 rounded bg-red-500/50" /><span className="text-xs">35-44%</span></div>
-          <div className="flex items-center gap-2"><div className="w-6 h-6 rounded bg-red-500/80" /><span className="text-xs">Below 35%</span></div>
+          <span className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">Win Rate</span>
+          {[
+            { color: 'bg-green-500/80', label: '65%+' },
+            { color: 'bg-green-500/50', label: '55–64%' },
+            { color: 'bg-gray-500/30', label: '45–54%' },
+            { color: 'bg-red-500/50', label: '35–44%' },
+            { color: 'bg-red-500/80', label: 'Below 35%' },
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-2">
+              <div className={`w-5 h-5 rounded ${color}`} />
+              <span className="text-xs text-[var(--text-secondary)]">{label}</span>
+            </div>
+          ))}
         </div>
       </Card>
 
+      {/* Matrix grid */}
       <Card className="p-6 bg-[var(--surface-1)] border-[var(--border-default)]">
         <div className="mb-4">
           <h3 className="font-semibold text-[var(--text-primary)] mb-1">Full Matchup Grid</h3>
           <p className="text-xs text-[var(--text-muted)]">Click any cell for detailed breakdown</p>
         </div>
-
         <HeatmapGrid
           data={matrixData?.cells || []}
           rows={matrixData?.rows || []}
@@ -228,6 +301,7 @@ export default function MatchupMatrix() {
         </div>
       </Card>
 
+      {/* Matchup detail sheet */}
       {selectedMatchup && (
         <Sheet open={!!selectedMatchup} onOpenChange={() => setSelectedMatchup(null)}>
           <SheetContent className="bg-[var(--surface-1)] border-l border-[var(--border-default)] sm:max-w-[540px]">
@@ -268,16 +342,16 @@ export default function MatchupMatrix() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between p-2 bg-[var(--surface-3)] rounded">
-                    <span className="text-sm">Deck A Win Rate</span>
-                    <span className="text-xs text-[var(--state-success)]">{selectedDeckA?.win_rate_estimate ?? 0}%</span>
+                    <span className="text-sm text-[var(--text-secondary)]">Deck A Win Rate</span>
+                    <span className="text-xs font-medium text-[var(--state-success)]">{selectedDeckA?.win_rate_estimate ?? 0}%</span>
                   </div>
                   <div className="flex items-center justify-between p-2 bg-[var(--surface-3)] rounded">
-                    <span className="text-sm">Deck B Win Rate</span>
-                    <span className="text-xs text-[var(--state-success)]">{selectedDeckB?.win_rate_estimate ?? 0}%</span>
+                    <span className="text-sm text-[var(--text-secondary)]">Deck B Win Rate</span>
+                    <span className="text-xs font-medium text-[var(--state-success)]">{selectedDeckB?.win_rate_estimate ?? 0}%</span>
                   </div>
                   <div className="flex items-center justify-between p-2 bg-[var(--surface-3)] rounded">
-                    <span className="text-sm">Top8 Delta</span>
-                    <span className="text-xs text-[var(--state-success)]">
+                    <span className="text-sm text-[var(--text-secondary)]">Top8 Delta</span>
+                    <span className="text-xs font-medium text-[var(--state-success)]">
                       {((selectedDeckA?.top8_rate ?? 0) - (selectedDeckB?.top8_rate ?? 0)).toFixed(1)}%
                     </span>
                   </div>
@@ -289,7 +363,7 @@ export default function MatchupMatrix() {
                 <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
                   {dynamicPlayPatterns.map((line) => (
                     <li key={line} className="flex gap-2">
-                      <span className="text-[var(--accent-blue)]">-</span>
+                      <span className="text-[var(--accent-blue)]">–</span>
                       {line}
                     </li>
                   ))}
