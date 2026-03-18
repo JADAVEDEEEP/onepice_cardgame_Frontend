@@ -13,6 +13,10 @@ import MyCollection from './pages/my-collection';
 import Reports from './pages/reports';
 import Settings from './pages/settings';
 import DeckAnalytics from './pages/deck-analytics';
+import LearningGuideSectionPage, {
+  LearningGuideContentsPage,
+  LearningGuideHomePage
+} from './pages/learning-guide-section';
 import { AppLayout } from './layouts/app-layout';
 
 export const router = createBrowserRouter([
@@ -79,6 +83,18 @@ export const router = createBrowserRouter([
       {
         path: 'settings',
         Component: Settings
+      },
+      {
+        path: 'learning-guide',
+        Component: LearningGuideHomePage
+      },
+      {
+        path: 'learning-guide/toc',
+        Component: LearningGuideContentsPage
+      },
+      {
+        path: 'learning-guide/:section',
+        Component: LearningGuideSectionPage
       }
     ]
   }

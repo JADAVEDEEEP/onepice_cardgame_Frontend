@@ -12,7 +12,7 @@ import {
 export function AppHeader() {
   return (
     <header className="sticky top-0 z-20 bg-[var(--surface-1)] border-b border-[var(--border-default)]">
-      <div className="flex items-center gap-4 px-6 py-4">
+      <div className="flex items-center gap-4 px-6 py-4 pl-16 lg:pl-6">
         {/* Logo for mobile */}
         <div className="lg:hidden">
           <h1 className="text-lg font-bold text-[var(--text-primary)]">OPTCG DeckLab</h1>

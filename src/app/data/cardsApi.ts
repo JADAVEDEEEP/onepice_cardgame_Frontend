@@ -32,7 +32,6 @@ interface BackendCard {
 
 const DEFAULT_IMAGE_URL = 'https://placehold.co/400x560?text=Card';
 const API_URL = withApiBase('/cardsApi/cards');
-
 function normalizeColor(value?: string): OPTCGColor {
   const normalized = (value || '').toLowerCase();
   if (
@@ -129,7 +128,7 @@ function toCard(card: BackendCard, index: number): Card {
     text_effect: effect,
     rarity: card.rarity || '-',
     set_code: card.pack_id || cardCode.split('-')[0] || 'SET',
-    image_url: card.img_full_url || card.img_url || DEFAULT_IMAGE_URL,
+    image_url: withApiBase(`/cardsApi/image/${encodeURIComponent(cardCode)}`) || DEFAULT_IMAGE_URL,
     tournament_status: tournamentStatus,
     is_active: tournamentStatus !== 'banned'
   };

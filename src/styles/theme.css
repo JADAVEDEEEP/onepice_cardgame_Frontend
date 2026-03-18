@@ -37,6 +37,18 @@
   --state-warn: #f59e0b;
   --state-danger: #dc2626;
   --state-info: #3b82f6;
+
+  /* Learning guide theme */
+  --theme-primary: #ef4444;
+  --theme-secondary: #fbbf24;
+  --theme-accent: #f97316;
+  --theme-bg: #60a5fa;
+  --theme-bg-secondary: #93c5fd;
+  --theme-card-bg: #3b82f6;
+  --theme-text: #ffffff;
+  --theme-text-light: #ffffff;
+  --theme-border: #60a5fa;
+  --theme-accent-bg: rgba(59, 130, 246, 0.5);
   
   /* Spacing (in px for reference) */
   --space-4: 0.25rem;
@@ -122,6 +134,18 @@
   --state-warn: #f59e0b;
   --state-danger: #ef4444;
   --state-info: #3b82f6;
+
+  /* Learning guide theme */
+  --theme-primary: #ef4444;
+  --theme-secondary: #fbbf24;
+  --theme-accent: #f97316;
+  --theme-bg: #60a5fa;
+  --theme-bg-secondary: #93c5fd;
+  --theme-card-bg: #3b82f6;
+  --theme-text: #ffffff;
+  --theme-text-light: #ffffff;
+  --theme-border: #60a5fa;
+  --theme-accent-bg: rgba(59, 130, 246, 0.5);
   
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -280,5 +304,119 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+}
+
+.learning-guide-surface {
+  --background: #f6efe2;
+  --foreground: #0a1f44;
+  --card: #fffdf8;
+  --card-foreground: #0a1f44;
+  --popover: #fffdf8;
+  --popover-foreground: #0a1f44;
+  --primary: #0a1f44;
+  --primary-foreground: #ffffff;
+  --secondary: #f1e4cf;
+  --secondary-foreground: #0a1f44;
+  --muted: #efe3cf;
+  --muted-foreground: #5f6b82;
+  --accent: #f1e4cf;
+  --accent-foreground: #0a1f44;
+  --border: rgba(193, 154, 107, 0.42);
+  --input: #ffffff;
+  --input-background: #ffffff;
+  --ring: rgba(10, 31, 68, 0.2);
+  min-height: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 1rem 1.25rem;
+  border-radius: 1.125rem;
+  border: 1px solid rgba(193, 154, 107, 0.22);
+  background: linear-gradient(180deg, #f7f1e7 0%, #f2e7d6 100%);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  color: #0a1f44;
+  font-size: 0.88rem;
+}
+
+.learning-guide-surface h1 {
+  font-size: clamp(1.75rem, 2.7vw, 2.6rem);
+  line-height: 1.12;
+}
+
+.learning-guide-surface h2 {
+  font-size: clamp(1.3rem, 1.9vw, 1.8rem);
+  line-height: 1.18;
+}
+
+.learning-guide-surface h3 {
+  font-size: clamp(1.05rem, 1.3vw, 1.3rem);
+  line-height: 1.25;
+}
+
+.learning-guide-surface h4 {
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.learning-guide-surface [data-slot='button'],
+.learning-guide-surface label,
+.learning-guide-surface p,
+.learning-guide-surface li,
+.learning-guide-surface td,
+.learning-guide-surface th {
+  font-size: 0.93em;
+}
+
+.learning-guide-surface .text-4xl {
+  font-size: 2.25rem !important;
+}
+
+.learning-guide-surface .text-3xl {
+  font-size: 1.85rem !important;
+}
+
+.learning-guide-surface .text-2xl {
+  font-size: 1.45rem !important;
+}
+
+.learning-guide-surface .text-xl {
+  font-size: 1.2rem !important;
+}
+
+.learning-guide-surface .text-lg {
+  font-size: 1.02rem !important;
+}
+
+.learning-guide-surface .p-6 {
+  padding: 1.25rem !important;
+}
+
+.learning-guide-surface .p-4 {
+  padding: 0.9rem !important;
+}
+
+.learning-guide-surface .gap-6 {
+  gap: 1rem !important;
+}
+
+.learning-guide-surface .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1.25rem !important;
+}
+
+.learning-guide-surface .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem !important;
+}
+
+.learning-guide-surface .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem !important;
+}
+
+.learning-guide-surface [data-slot='card'] {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+@media (min-width: 1024px) {
+  .learning-guide-surface {
+    padding: 1.25rem 1.25rem 1.5rem;
   }
 }

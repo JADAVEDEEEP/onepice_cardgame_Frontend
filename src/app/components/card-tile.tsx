@@ -29,17 +29,6 @@ export function CardTile({ card, onAdd, onRemove, count = 0, synergy, compact = 
     add(primary);
     add(primary.split('?')[0]);
 
-    const hasOfficialPath = primary.includes('/images/cardlist/card/');
-    if (hasOfficialPath) {
-      add(`https://en.onepiece-cardgame.com/images/cardlist/card/${card.card_code}.png`);
-      add(`https://en.onepiece-cardgame.com/images/cardlist/card/${card.card_code}.jpg`);
-      const baseCode = card.card_code.replace(/_p\d+$/i, '');
-      if (baseCode !== card.card_code) {
-        add(`https://en.onepiece-cardgame.com/images/cardlist/card/${baseCode}.png`);
-        add(`https://en.onepiece-cardgame.com/images/cardlist/card/${baseCode}.jpg`);
-      }
-    }
-
     add(fallback);
     return Array.from(urls);
   }, [card.card_code, card.image_url]);

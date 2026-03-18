@@ -43,6 +43,12 @@ export default function Login() {
               Continue as Guest
             </Button>
           </Link>
+
+          <Link to="/learning-guide" className="block">
+            <Button variant="secondary" className="w-full" size="lg">
+              Open Learning Guide
+            </Button>
+          </Link>
         </div>
 
         <div className="mt-6 text-center">
