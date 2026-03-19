@@ -200,7 +200,7 @@ export default function GenerateDeck() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Generate Best Deck</h1>
-        <p className="text-[var(--text-secondary)]">Build an optimized competitive deck instantly using live analytics API</p>
+        <p className="text-[var(--text-secondary)]">Build an AI-refined competitive deck using live leader/color data and analytics</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -360,7 +360,7 @@ export default function GenerateDeck() {
               <Sparkles className="w-16 h-16 text-[var(--text-muted)] mb-4" />
               <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Ready to Generate</h3>
               <p className="text-[var(--text-secondary)] max-w-md">
-                Select your parameters and click "Generate Optimal Deck" to fetch the best deck from your API.
+                Select your parameters and click "Generate Optimal Deck" to build an AI-refined best deck from your analytics pipeline.
               </p>
             </Card>
           ) : (
