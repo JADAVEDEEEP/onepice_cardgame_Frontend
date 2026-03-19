@@ -1,6 +1,7 @@
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 export function DecisionTables() {
   return (
@@ -288,6 +289,18 @@ export function DecisionTables() {
           </ul>
         </Card>
       </div>
+
+      <LearningGuideAIHelper
+        title="Decision Logic Coach"
+        topic="Decision Tables & Logic"
+        description="Use AI to turn these static rule tables into real in-game decision help."
+        context="The page covers timing windows, combat math, legal actions, card play restrictions, blockers, counters, and common mistakes."
+        prompts={[
+          "Given a 7000 attack into my 5000 leader, how should I decide between blocker and counter?",
+          "Explain priority timing in simple words.",
+          "Turn these decision tables into a quick checklist for new players.",
+        ]}
+      />
     </div>
   );
 }

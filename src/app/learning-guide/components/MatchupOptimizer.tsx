@@ -1,6 +1,7 @@
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Swords, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 interface Matchup {
   archetype: string;
@@ -285,6 +286,18 @@ export function MatchupOptimizer() {
           </span>
         </p>
       </Card>
+
+      <LearningGuideAIHelper
+        title="Matchup Prep Assistant"
+        topic="Matchup Optimization"
+        description="Ask AI for matchup plans, mulligan ideas, and what to respect from each archetype."
+        context="The page compares matchups versus aggro red, control black, trigger yellow, ramp purple, midrange green, and tempo blue, with weak points, AI adjustments, and strategy notes."
+        prompts={[
+          "How should I play this deck into Aggro Red?",
+          "What mulligan plan helps against Control Black?",
+          "Turn this matchup table into a simple tournament prep note sheet.",
+        ]}
+      />
     </div>
   );
 }

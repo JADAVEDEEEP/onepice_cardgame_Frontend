@@ -3,6 +3,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { TrendingUp, Target, Calendar } from "lucide-react";
 import { useState } from "react";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 interface MetaCard {
   name: string;
@@ -282,6 +283,19 @@ export function MetaSnapshot() {
           ))}
         </div>
       </section>
+      <LearningGuideAIHelper
+        title="Meta Snapshot AI Helper"
+        topic="Meta Snapshot"
+        description="Ask AI to explain this section in simpler words, answer follow-up questions, and turn the topic into practical game advice."
+        context="This learning-guide page is about Meta Snapshot in the One Piece TCG learning experience."
+        prompts={[
+          "Explain the most important idea on this page in simple words.",
+          "Give me a practical example from a real match.",
+          "What mistakes do new players make with this topic?",
+        ]}
+      />
     </div>
   );
 }
+
+

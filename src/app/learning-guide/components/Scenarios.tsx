@@ -2,6 +2,7 @@ import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 export function Scenarios() {
   const beginnerScenarios = [
@@ -295,6 +296,18 @@ export function Scenarios() {
           </li>
         </ul>
       </Card>
+
+      <LearningGuideAIHelper
+        title="Scenario Coach"
+        topic="Practice Scenarios"
+        description="Ask AI to explain lines, punish mistakes, or turn these examples into fresh drills."
+        context="The page contains beginner, intermediate, and advanced practice scenarios focused on attack math, blockers, counters, DON management, stage timing, and survival decisions."
+        prompts={[
+          "Turn one beginner scenario into a harder follow-up drill.",
+          "Explain how to think through blocker versus counter decisions.",
+          "Give me a 3-step method for solving advanced combat scenarios.",
+        ]}
+      />
     </div>
   );
 }

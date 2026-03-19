@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { withApiBase } from "../../data/apiBase";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 type CoachMove = {
   title: string;
@@ -825,6 +826,19 @@ function InsightCard({
       </div>
       <p className="text-sm leading-6 text-gray-700">{body}</p>
       <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{footer}</p>
+      <LearningGuideAIHelper
+        title="AICoach AI Helper"
+        topic="AICoach"
+        description="Ask AI to explain this section in simpler words, answer follow-up questions, and turn the topic into practical game advice."
+        context="This learning-guide page is about AICoach in the One Piece TCG learning experience."
+        prompts={[
+          "Explain the most important idea on this page in simple words.",
+          "Give me a practical example from a real match.",
+          "What mistakes do new players make with this topic?",
+        ]}
+      />
     </div>
   );
 }
+
+

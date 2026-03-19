@@ -2,6 +2,7 @@ import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Palette } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 interface ColorIdentity {
   name: string;
@@ -557,6 +558,18 @@ export function ColorExecution() {
           </TabsContent>
         ))}
       </Tabs>
+      <LearningGuideAIHelper
+        title="Color Execution AI Helper"
+        topic="Color Execution"
+        description="Ask AI to explain this section in simpler words, answer follow-up questions, and turn the topic into practical game advice."
+        context="This learning-guide page is about Color Execution in the One Piece TCG learning experience."
+        prompts={[
+          "Explain the most important idea on this page in simple words.",
+          "Give me a practical example from a real match.",
+          "What mistakes do new players make with this topic?",
+        ]}
+      />
     </div>
   );
 }
+

@@ -2,6 +2,7 @@ import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Trophy, Target, AlertCircle, Lightbulb, TrendingUp, Brain, ExternalLink } from "lucide-react";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 interface DeckRecommendation {
   name: string;
@@ -314,6 +315,18 @@ export function AIVerdict() {
           Generate Matchup Drills
         </Button>
       </div>
+
+      <LearningGuideAIHelper
+        title="Verdict Follow-Up Coach"
+        topic="AI Verdict"
+        description="Ask AI to explain the recommendation, compare playstyles, or turn the verdict into a training plan."
+        context="The page gives a recommended deck, best and worst matchups, early-mid-late game plans, core masterpiece moves, win probability context, and an AI logic breakdown."
+        prompts={[
+          "Why is this deck better than a safer beginner deck?",
+          "Give me a week-one practice plan for this recommendation.",
+          "What mistakes would make this verdict fail in real matches?",
+        ]}
+      />
     </div>
   );
 }

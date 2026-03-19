@@ -1,6 +1,7 @@
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { BarChart3, AlertTriangle, CheckCircle2, TrendingUp } from "lucide-react";
+import { LearningGuideAIHelper } from "./LearningGuideAIHelper";
 
 interface ConsistencyMetric {
   name: string;
@@ -285,6 +286,19 @@ export function ConsistencyAnalyzer() {
           </span>
         </p>
       </Card>
+      <LearningGuideAIHelper
+        title="Consistency Analyzer AI Helper"
+        topic="Consistency Analyzer"
+        description="Ask AI to explain this section in simpler words, answer follow-up questions, and turn the topic into practical game advice."
+        context="This learning-guide page is about Consistency Analyzer in the One Piece TCG learning experience."
+        prompts={[
+          "Explain the most important idea on this page in simple words.",
+          "Give me a practical example from a real match.",
+          "What mistakes do new players make with this topic?",
+        ]}
+      />
     </div>
   );
 }
+
+
